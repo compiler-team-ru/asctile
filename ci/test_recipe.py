@@ -1,6 +1,7 @@
 """Regression tests for artifact selection and package content boundaries."""
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -19,6 +20,35 @@ SHA = 'a' * 40
 
 
 class RecipeTests(unittest.TestCase):
+    def verify_publication(self, responses):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'artifact').mkdir()
+            (root / 'artifact/build-passport.json').write_text(json.dumps({'version': '1.1.1.dev1', 'wheel': 'checked.whl'}))
+            original = Path.cwd()
+            try:
+                os.chdir(root)
+                with patch.dict(os.environ, {'PUBLISH_SHA256': 'b' * 64}), \
+                     patch.object(publish.urllib.request, 'urlopen', side_effect=[io.BytesIO(json.dumps(r).encode()) for r in responses]), \
+                     patch.object(publish.time, 'sleep') as sleep:
+                    publish.verify_published()
+                    return sleep.call_count
+            finally:
+                os.chdir(original)
+
+    def test_wait_for_new_file_in_existing_release(self):
+        stale = {'urls': [{'filename': 'other-target.whl', 'digests': {'sha256': 'a' * 64}}]}
+        ready = {'urls': [{'filename': 'checked.whl', 'digests': {'sha256': 'b' * 64}}]}
+        self.assertEqual(self.verify_publication([stale, ready]), 1)
+
+    def test_reject_wrong_published_bytes(self):
+        with self.assertRaises(AssertionError):
+            self.verify_publication([{'urls': [{'filename': 'checked.whl', 'digests': {'sha256': 'a' * 64}}]}])
+
+    def test_missing_published_file_never_passes(self):
+        with self.assertRaises(RuntimeError):
+            self.verify_publication([{'urls': []}] * 6)
+
     def resolve_case(self, expired=False, conclusion='success', force=False, target_name='cp310-aarch64'):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

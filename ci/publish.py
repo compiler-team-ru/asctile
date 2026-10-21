@@ -63,18 +63,27 @@ def check():
 def verify_published():
     passport = json.loads(Path('artifact/build-passport.json').read_text())
     url = f"https://pypi.org/pypi/pyasc-dev/{passport['version']}/json"
+    expected = os.environ['PUBLISH_SHA256']
     for attempt in range(6):
         try:
-            with urllib.request.urlopen(url, timeout=30) as response:
+            # Each wheel gets its own cache key when adding files to a release.
+            request = urllib.request.Request(
+                f'{url}?sha256={expected}&attempt={attempt}',
+                headers={'Cache-Control': 'no-cache'},
+            )
+            with urllib.request.urlopen(request, timeout=30) as response:
                 release = json.load(response)
             match = [f for f in release['urls'] if f['filename'] == passport['wheel']]
-            assert len(match) == 1 and match[0]['digests']['sha256'] == os.environ['PUBLISH_SHA256']
-            print(f"Published and verified: https://pypi.org/project/pyasc-dev/{passport['version']}/")
-            return
+            if match:
+                assert len(match) == 1 and match[0]['digests']['sha256'] == expected
+                print(f"Published and verified: https://pypi.org/project/pyasc-dev/{passport['version']}/")
+                return
         except urllib.error.HTTPError as e:
             if e.code != 404 or attempt == 5:
                 raise
-            time.sleep(10)
+        if attempt == 5:
+            raise RuntimeError('The uploaded wheel is not yet visible on PyPI; reconcile by GET before retrying publication')
+        time.sleep(10)
 
 
 if __name__ == '__main__':
