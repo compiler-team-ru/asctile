@@ -2,7 +2,7 @@
 FROM ubuntu@sha256:88881eb36da489f9ff8746ece8048ca16cc94f80e8cd3ae7e8335d8822631591
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       ca-certificates curl git xz-utils python3 python3-dev python3-venv \
-      build-essential lld zlib1g-dev libzstd-dev libtinfo-dev \
+      build-essential zlib1g-dev libzstd-dev libtinfo-dev \
     && rm -rf /var/lib/apt/lists/*
 COPY ci/toolchain.json /opt/toolchain.json
 RUN curl --fail --location --connect-timeout 20 --max-time 900 \
