@@ -1,0 +1,121 @@
+"""Regression tests for artifact selection and package content boundaries."""
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+import resolve
+import publish
+
+spec = importlib.util.spec_from_file_location('wheel_check', Path(__file__).with_name('check-wheel.py'))
+wheel_check = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(wheel_check)
+SHA = 'a' * 40
+
+
+class RecipeTests(unittest.TestCase):
+    def resolve_case(self, expired=False, conclusion='success', force=False):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'ci').mkdir()
+            (root / '.github/workflows').mkdir(parents=True)
+            (root / '.github/workflows/wheels.yml').write_text('recipe')
+            (root / 'README.md').write_text('description')
+            (root / '.dockerignore').write_text('*')
+            artifact = f'wheel-{SHA}-{resolve.recipe_digest(root)[:16]}-cp310-manylinux-2-35-aarch64'
+            responses = [
+                {'default_branch': 'v2'},
+                {'sha': SHA, 'commit': {'committer': {'date': '2026-10-21T00:00:00Z'}}},
+                {'artifacts': [{'name': artifact, 'expired': expired, 'workflow_run': {'id': 1}}]},
+                {'conclusion': conclusion},
+            ]
+            with patch.object(resolve, '__file__', str(root / 'ci/resolve.py')), patch.object(resolve, 'api', side_effect=responses), patch.dict(os.environ, {
+                'INPUT_SOURCE_SHA': '', 'INPUT_FORCE': str(force).lower(),
+                'GITHUB_REPOSITORY': 'owner/wheels', 'GITHUB_OUTPUT': str(root / 'output'),
+            }):
+                resolve.main()
+            return json.loads((root / 'source.json').read_text())['build']
+
+    def test_skip_successful_artifact(self):
+        self.assertFalse(self.resolve_case())
+
+    def test_retry_failed_build(self):
+        self.assertTrue(self.resolve_case(conclusion='failure'))
+
+    def test_rebuild_expired_artifact(self):
+        self.assertTrue(self.resolve_case(expired=True))
+
+    def test_force_rebuild(self):
+        self.assertTrue(self.resolve_case(force=True))
+
+    def test_invalid_source_ref(self):
+        for value in ('main', 'a' * 39, SHA + '\nbuild=false'):
+            with self.assertRaises(ValueError):
+                resolve.valid_sha(value)
+
+    def test_payload_boundaries(self):
+        dist = 'pyasc_dev-1.1.1.dev1.dist-info'
+        for name in ('asc/runtime/__pycache__/jit.pyc', 'asc/token.txt', 'asc/../../secret.py', 'tests/test.py', 'build/native.so', dist + '/credentials.json'):
+            self.assertFalse(wheel_check.allowed(name, dist), name)
+        for name in ('asc/runtime/jit.py', wheel_check.NATIVE, dist + '/licenses/LICENSE', 'pyasc_dev.libs/libzstd-a1561916.so.1.4.8'):
+            self.assertTrue(wheel_check.allowed(name, dist), name)
+
+    def check_publication(self, damage=None):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifact = root / 'artifact'
+            artifact.mkdir()
+            name = 'pyasc_dev-1.1.1.dev1-cp310-cp310-manylinux_2_35_aarch64.whl'
+            content = b'exact qualified bytes'
+            checksum = hashlib.sha256(content).hexdigest()
+            (artifact / name).write_bytes(content)
+            passport = {'wheel': name, 'wheel_sha256': checksum, 'run_id': '42',
+                        'source_repository': 'compiler-team-ru/pyasc'}
+            (artifact / 'build-passport.json').write_text(json.dumps(passport))
+            (artifact / 'SHA256SUMS').write_text(''.join(
+                hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n'
+                for p in sorted(artifact.iterdir())))
+            if damage == 'bytes':
+                (artifact / name).write_bytes(b'different bytes')
+            if damage == 'extra':
+                (artifact / 'debug.log').write_text('not a distribution')
+            original = Path.cwd()
+            try:
+                os.chdir(root)
+                with patch.dict(os.environ, {'PUBLISH_RUN_ID': '42', 'PUBLISH_SHA256': checksum}):
+                    publish.check()
+                self.assertEqual((root / 'dist' / name).read_bytes(), content)
+                self.assertEqual(len(list((root / 'dist').iterdir())), 1)
+            finally:
+                os.chdir(original)
+
+    def test_publish_exact_bytes_only(self):
+        self.check_publication()
+
+    def test_reject_changed_wheel(self):
+        with self.assertRaises(AssertionError):
+            self.check_publication('bytes')
+
+    def test_reject_extra_artifact_file(self):
+        with self.assertRaises(AssertionError):
+            self.check_publication('extra')
+
+    def test_reject_unqualified_publication(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {'PUBLISH_RUN_ID': '1', 'PUBLISH_SHA256': 'b'*64, 'GITHUB_REPOSITORY': 'owner/wheels', 'GITHUB_OUTPUT': directory+'/output'}):
+                for run in (
+                    {'conclusion': 'failure', 'head_branch': 'main'},
+                    {'conclusion': 'success', 'head_branch': 'feature'},
+                    {'conclusion': 'success', 'head_branch': 'main', 'path': '.github/workflows/untrusted.yml'},
+                    {'conclusion': 'success', 'head_branch': 'main', 'path': '.github/workflows/wheels.yml', 'event': 'pull_request'},
+                ):
+                    with patch.object(publish, 'api', return_value=run), self.assertRaises(AssertionError):
+                        publish.resolve()
+
+
+if __name__ == '__main__':
+    unittest.main()

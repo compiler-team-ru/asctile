@@ -1,0 +1,7 @@
+out/
+work/
+__pycache__/
+*.pyc
+source.json
+dist/
+artifact/

@@ -1,0 +1,13 @@
+cmake==3.31.10
+ninja==1.13.2
+numpy==1.26.4
+packaging==26.3
+pybind11==2.10.3
+setuptools==84.2.1
+setuptools-scm==8.3.1
+tomli==2.5.0
+typing_extensions==4.16.0
+wheel==0.48.0
+auditwheel==6.8.2
+pyelftools==0.33
+patchelf==0.19.1.0

@@ -1,0 +1,7 @@
+{
+  "version": "19.1.7",
+  "archive_url": "https://cann-ai.obs.cn-north-4.myhuaweicloud.com/llvm/llvm-19.1.7-aarch64.tar.xz",
+  "archive_sha256": "25315ef5a0f1f51ae0474ad39be58244c660bc7d984cd9056c3c66b3635743b1",
+  "source_instructions": "experimental/asctile/docs/installation/build-from-source.rst",
+  "revision": "cd708029e0b2869e80abe31ddb175f7c35361f90"
+}

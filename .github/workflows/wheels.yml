@@ -1,0 +1,146 @@
+name: Development wheel
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact mirror SHA; empty selects its current default branch'
+        type: string
+        default: ''
+      force:
+        description: 'Rebuild even if a successful artifact is retained'
+        type: boolean
+        default: false
+      publish_run_id:
+        description: 'Publish an existing successful build run; empty builds an artifact'
+        type: string
+        default: ''
+      publish_sha256:
+        description: 'Full SHA256 of the qualified wheel (required for publishing)'
+        type: string
+        default: ''
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wheels.yml', 'ci/**', 'README.md']
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: development-wheel
+  cancel-in-progress: false
+
+jobs:
+  wheel:
+    if: inputs.publish_run_id == ''
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - name: Checkout build recipe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: recipe
+          persist-credentials: false
+      - name: Test recipe
+        working-directory: recipe
+        run: python3 -m unittest discover -s ci -p 'test_*.py'
+      - name: Resolve source and check retained artifacts
+        id: source
+        working-directory: recipe
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_SOURCE_SHA: ${{ inputs.source_sha }}
+          INPUT_FORCE: ${{ inputs.force }}
+        run: python3 ci/resolve.py
+      - name: Checkout exact PyAsc source
+        if: steps.source.outputs.build == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: compiler-team-ru/pyasc
+          ref: ${{ steps.source.outputs.sha }}
+          path: source
+          persist-credentials: false
+      - name: Build isolated toolchain image
+        if: steps.source.outputs.build == 'true'
+        run: docker build --tag pyasc-wheel-builder --file recipe/ci/Dockerfile recipe
+      - name: Build wheel and check clean installations
+        if: steps.source.outputs.build == 'true'
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          mkdir work out
+          name="pyasc-wheel-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+          docker run --rm --name "$name" --cpus 2 --memory 14g --memory-swap 14g \
+            -e SOURCE_SHA -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT \
+            -e WHEEL_VERSION="1.1.1.dev$(date -u +%Y%m%d%H%M%S)" \
+            -e BUILDER_IMAGE_ID="$(docker image inspect pyasc-wheel-builder --format '{{.Id}}')" \
+            -v "$PWD/source:/source:ro" -v "$PWD/recipe:/recipe:ro" \
+            -v "$PWD/work:/work" -v "$PWD/out:/out" \
+            pyasc-wheel-builder bash /recipe/ci/build.sh
+          cd out
+          sha256sum -c SHA256SUMS
+      - name: Retain checked artifact
+        if: steps.source.outputs.build == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.source.outputs.artifact }}
+          path: |
+            out/*.whl
+            out/build-passport.json
+            out/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Summary
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          DID_BUILD: ${{ steps.source.outputs.build }}
+          ARTIFACT: ${{ steps.source.outputs.artifact }}
+        run: |
+          printf 'Source: `%s`\n\nBuild required: `%s`\n\nArtifact: `%s`\n\nCANN, numerical and hardware qualification: not run.\n' \
+            "$SOURCE_SHA" "$DID_BUILD" "$ARTIFACT" >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_run_id != '' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pyasc-dev/
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      PUBLISH_RUN_ID: ${{ inputs.publish_run_id }}
+      PUBLISH_SHA256: ${{ inputs.publish_sha256 }}
+    steps:
+      - name: Checkout publishing checks
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select successful build artifact
+        id: selected
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ci/publish.py resolve
+      - name: Download the checked artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ steps.selected.outputs.artifact }}
+          path: artifact
+          run-id: ${{ inputs.publish_run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify the selected wheel
+        run: python3 ci/publish.py check
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
+        with:
+          packages-dir: dist/
+      - name: Verify published bytes
+        run: python3 ci/publish.py verify

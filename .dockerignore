@@ -1,0 +1,5 @@
+*
+!ci/
+!ci/Dockerfile
+!ci/requirements-build.lock
+!ci/toolchain.json
