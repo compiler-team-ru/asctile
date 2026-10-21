@@ -11,9 +11,11 @@ import urllib.error
 import urllib.request
 
 from resolve import api
+from target import get_target, artifact_suffix, wheel_tag
 
 
 def resolve():
+    target = get_target()
     run_id = os.environ['PUBLISH_RUN_ID']
     assert re.fullmatch(r'[1-9][0-9]*', run_id), 'Invalid build run ID'
     assert re.fullmatch(r'[0-9a-f]{64}', os.environ['PUBLISH_SHA256']), 'A full wheel SHA256 is required'
@@ -23,18 +25,19 @@ def resolve():
     assert run['path'] == '.github/workflows/wheels.yml'
     assert run['event'] in {'schedule', 'workflow_dispatch', 'push'}
     artifacts = api(f'repos/{repo}/actions/runs/{run_id}/artifacts')['artifacts']
-    artifacts = [a for a in artifacts if a['name'].startswith('wheel-') and not a['expired']]
+    artifacts = [a for a in artifacts if a['name'].startswith('wheel-') and a['name'].endswith('-' + artifact_suffix(target)) and not a['expired']]
     assert len(artifacts) == 1, 'Expected one retained wheel artifact'
     with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
         f.write('artifact=' + artifacts[0]['name'] + '\n')
 
 
 def check():
+    target = get_target()
     root = Path('artifact')
     wheels = list(root.glob('*.whl'))
     assert len(wheels) == 1
     wheel = wheels[0]
-    assert re.fullmatch(r'pyasc_dev-1\.1\.1\.dev[0-9]+-cp310-cp310-manylinux_2_35_aarch64\.whl', wheel.name)
+    assert re.fullmatch(r'pyasc_dev-1\.1\.1\.dev[0-9]+-' + re.escape(wheel_tag(target)) + r'\.whl', wheel.name)
     assert {p.name for p in root.iterdir()} == {wheel.name, 'build-passport.json', 'SHA256SUMS'}
     expected = {}
     for line in (root / 'SHA256SUMS').read_text().splitlines():
@@ -51,6 +54,7 @@ def check():
     assert str(passport['run_id']) == os.environ['PUBLISH_RUN_ID']
     assert passport['wheel'] == wheel.name
     assert passport['source_repository'] == 'compiler-team-ru/pyasc'
+    assert passport.get('target', 'cp310-aarch64') == target['id']
     Path('dist').mkdir()
     shutil.copyfile(wheel, Path('dist') / wheel.name)
     print(f"Verified {wheel.name}: {expected[wheel.name]}")

@@ -1,7 +1,28 @@
 {
-  "version": "19.1.7",
-  "archive_url": "https://cann-ai.obs.cn-north-4.myhuaweicloud.com/llvm/llvm-19.1.7-aarch64.tar.xz",
-  "archive_sha256": "25315ef5a0f1f51ae0474ad39be58244c660bc7d984cd9056c3c66b3635743b1",
-  "source_instructions": "experimental/asctile/docs/installation/build-from-source.rst",
-  "revision": "cd708029e0b2869e80abe31ddb175f7c35361f90"
+  "cp310-aarch64": {
+    "version": "19.1.7",
+    "archive_url": "https://cann-ai.obs.cn-north-4.myhuaweicloud.com/llvm/llvm-19.1.7-aarch64.tar.xz",
+    "archive_sha256": "25315ef5a0f1f51ae0474ad39be58244c660bc7d984cd9056c3c66b3635743b1",
+    "source_instructions": "experimental/asctile/docs/installation/build-from-source.rst",
+    "revision": "cd708029e0b2869e80abe31ddb175f7c35361f90",
+    "arch": "aarch64",
+    "python_tag": "cp310",
+    "python_bin": "/usr/bin/python3",
+    "native": "asc/_C/libpyasc.cpython-310-aarch64-linux-gnu.so",
+    "base_image": "ubuntu@sha256:88881eb36da489f9ff8746ece8048ca16cc94f80e8cd3ae7e8335d8822631591"
+  },
+  "cp311-x86_64": {
+    "version": "19.1.7",
+    "archive_url": "https://cann-ai.obs.cn-north-4.myhuaweicloud.com/llvm/llvm-19.1.7-x86_64.tar.xz",
+    "archive_sha256": "6399a16ba26de4dda18fa9353839ab9fcd89753e2f0baf73212019a324ee8e46",
+    "source_instructions": "experimental/asctile/docs/installation/build-from-source.rst",
+    "revision": "cd708029e0b2869e80abe31ddb175f7c35361f90",
+    "arch": "x86_64",
+    "python_tag": "cp311",
+    "python_bin": "/opt/python/bin/python3.11",
+    "native": "asc/_C/libpyasc.cpython-311-x86_64-linux-gnu.so",
+    "base_image": "ubuntu@sha256:98510ac07bb4545e389be502a8918b385c018bfe4ceeb5ac7e0375c782268b04",
+    "python_source_url": "https://www.python.org/ftp/python/3.11.17/Python-3.11.17.tar.xz",
+    "python_source_sha256": "bfb74ad39efae27cda510f134ab408e00f9992c56851cfc0b1cdb5646da11599"
+  }
 }

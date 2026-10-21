@@ -21,6 +21,11 @@ on:
         description: 'Full SHA256 of the qualified wheel (required for publishing)'
         type: string
         default: ''
+      publish_target:
+        description: 'Target of the qualified wheel to publish'
+        type: choice
+        options: [cp310-aarch64, cp311-x86_64]
+        default: cp310-aarch64
   push:
     branches: [main]
     paths: ['.github/workflows/wheels.yml', 'ci/**', 'README.md']
@@ -34,10 +39,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  wheel:
+  source:
     if: inputs.publish_run_id == ''
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      version: ${{ steps.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pin source and release version for both targets
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: python3 ci/resolve.py source
+
+  wheel:
+    needs: source
+    if: inputs.publish_run_id == ''
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: cp310-aarch64
+            runner: ubuntu-24.04-arm
+          - target: cp311-x86_64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      BUILD_TARGET: ${{ matrix.target }}
+      WHEEL_VERSION: ${{ needs.source.outputs.version }}
     steps:
       - name: Checkout build recipe
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,7 +86,7 @@ jobs:
         working-directory: recipe
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_SOURCE_SHA: ${{ inputs.source_sha }}
+          INPUT_SOURCE_SHA: ${{ needs.source.outputs.sha }}
           INPUT_FORCE: ${{ inputs.force }}
         run: python3 ci/resolve.py
       - name: Checkout exact PyAsc source
@@ -65,7 +99,9 @@ jobs:
           persist-credentials: false
       - name: Build isolated toolchain image
         if: steps.source.outputs.build == 'true'
-        run: docker build --tag pyasc-wheel-builder --file recipe/ci/Dockerfile recipe
+        env:
+          BASE_IMAGE: ${{ steps.source.outputs.base_image }}
+        run: docker build --build-arg BASE_IMAGE --build-arg BUILD_TARGET --tag pyasc-wheel-builder --file recipe/ci/Dockerfile recipe
       - name: Build wheel and check clean installations
         if: steps.source.outputs.build == 'true'
         env:
@@ -76,8 +112,7 @@ jobs:
           name="pyasc-wheel-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
           docker run --rm --name "$name" --cpus 2 --memory 14g --memory-swap 14g \
-            -e SOURCE_SHA -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT \
-            -e WHEEL_VERSION="1.1.1.dev$(date -u +%Y%m%d%H%M%S)" \
+            -e SOURCE_SHA -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT -e BUILD_TARGET -e WHEEL_VERSION \
             -e BUILDER_IMAGE_ID="$(docker image inspect pyasc-wheel-builder --format '{{.Id}}')" \
             -v "$PWD/source:/source:ro" -v "$PWD/recipe:/recipe:ro" \
             -v "$PWD/work:/work" -v "$PWD/out:/out" \
@@ -117,6 +152,7 @@ jobs:
       actions: read
       id-token: write
     env:
+      BUILD_TARGET: ${{ inputs.publish_target }}
       PUBLISH_RUN_ID: ${{ inputs.publish_run_id }}
       PUBLISH_SHA256: ${{ inputs.publish_sha256 }}
     steps:

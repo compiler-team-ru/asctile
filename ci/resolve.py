@@ -6,6 +6,9 @@ from pathlib import Path
 import re
 import urllib.parse
 import urllib.request
+import sys
+from datetime import datetime, timezone
+from target import get_target, artifact_suffix
 
 SOURCE = "compiler-team-ru/pyasc"
 
@@ -35,15 +38,29 @@ def valid_sha(value):
     return value
 
 
-def main():
-    root = Path(__file__).resolve().parent.parent
+def source_commit():
     branch = api(f"repos/{SOURCE}")["default_branch"]
     supplied = os.environ.get("INPUT_SOURCE_SHA", "")
     ref = valid_sha(supplied) if supplied else branch
     commit = api(f"repos/{SOURCE}/commits/{urllib.parse.quote(ref, safe='')}")
-    sha = valid_sha(commit["sha"])
+    valid_sha(commit['sha'])
+    return branch, commit
+
+
+def source():
+    _, commit = source_commit()
+    version = '1.1.1.dev' + datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
+    with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+        output.write(f"sha={commit['sha']}\nversion={version}\n")
+
+
+def main():
+    root = Path(__file__).resolve().parent.parent
+    target = get_target()
+    branch, commit = source_commit()
+    sha = commit['sha']
     recipe = recipe_digest(root)
-    artifact = f"wheel-{sha}-{recipe[:16]}-cp310-manylinux-2-35-aarch64"
+    artifact = f"wheel-{sha}-{recipe[:16]}-{artifact_suffix(target)}"
     build = True
     if os.environ.get("INPUT_FORCE", "false") != "true":
         repo = os.environ["GITHUB_REPOSITORY"]
@@ -57,13 +74,13 @@ def main():
                 break
     manifest = {"source_repository": SOURCE, "default_branch": branch, "source_sha": sha,
                 "commit_time": commit["commit"]["committer"]["date"], "recipe_sha256": recipe,
-                "artifact": artifact, "build": build, "recipe_commit": os.environ.get("GITHUB_SHA")}
+                "artifact": artifact, "build": build, "recipe_commit": os.environ.get("GITHUB_SHA"), "target": target['id']}
     (root / "source.json").write_text(json.dumps(manifest, indent=2) + "\n")
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-        for key, value in {"sha": sha, "artifact": artifact, "build": str(build).lower()}.items():
+        for key, value in {"sha": sha, "artifact": artifact, "build": str(build).lower(), "base_image": target['base_image']}.items():
             output.write(f"{key}={value}\n")
     print(json.dumps(manifest))
 
 
 if __name__ == "__main__":
-    main()
+    source() if sys.argv[1:] == ['source'] else main()

@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import resolve
 import publish
+from target import get_target, artifact_suffix, wheel_tag
 
 spec = importlib.util.spec_from_file_location('wheel_check', Path(__file__).with_name('check-wheel.py'))
 wheel_check = importlib.util.module_from_spec(spec)
@@ -18,7 +19,7 @@ SHA = 'a' * 40
 
 
 class RecipeTests(unittest.TestCase):
-    def resolve_case(self, expired=False, conclusion='success', force=False):
+    def resolve_case(self, expired=False, conclusion='success', force=False, target_name='cp310-aarch64'):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'ci').mkdir()
@@ -26,7 +27,7 @@ class RecipeTests(unittest.TestCase):
             (root / '.github/workflows/wheels.yml').write_text('recipe')
             (root / 'README.md').write_text('description')
             (root / '.dockerignore').write_text('*')
-            artifact = f'wheel-{SHA}-{resolve.recipe_digest(root)[:16]}-cp310-manylinux-2-35-aarch64'
+            artifact = f'wheel-{SHA}-{resolve.recipe_digest(root)[:16]}-{artifact_suffix(get_target(target_name))}'
             responses = [
                 {'default_branch': 'v2'},
                 {'sha': SHA, 'commit': {'committer': {'date': '2026-10-21T00:00:00Z'}}},
@@ -34,14 +35,15 @@ class RecipeTests(unittest.TestCase):
                 {'conclusion': conclusion},
             ]
             with patch.object(resolve, '__file__', str(root / 'ci/resolve.py')), patch.object(resolve, 'api', side_effect=responses), patch.dict(os.environ, {
-                'INPUT_SOURCE_SHA': '', 'INPUT_FORCE': str(force).lower(),
+                'INPUT_SOURCE_SHA': '', 'INPUT_FORCE': str(force).lower(), 'BUILD_TARGET': target_name,
                 'GITHUB_REPOSITORY': 'owner/wheels', 'GITHUB_OUTPUT': str(root / 'output'),
             }):
                 resolve.main()
             return json.loads((root / 'source.json').read_text())['build']
 
     def test_skip_successful_artifact(self):
-        self.assertFalse(self.resolve_case())
+        for target in ('cp310-aarch64', 'cp311-x86_64'):
+            self.assertFalse(self.resolve_case(target_name=target))
 
     def test_retry_failed_build(self):
         self.assertTrue(self.resolve_case(conclusion='failure'))
@@ -61,24 +63,46 @@ class RecipeTests(unittest.TestCase):
         dist = 'pyasc_dev-1.1.1.dev1.dist-info'
         for name in ('asc/runtime/__pycache__/jit.pyc', 'asc/token.txt', 'asc/../../secret.py', 'tests/test.py', 'build/native.so', dist + '/credentials.json'):
             self.assertFalse(wheel_check.allowed(name, dist), name)
-        for name in ('asc/runtime/jit.py', wheel_check.NATIVE, dist + '/licenses/LICENSE', 'pyasc_dev.libs/libzstd-a1561916.so.1.4.8'):
+        for name in ('asc/runtime/jit.py', get_target()['native'], dist + '/licenses/LICENSE', 'pyasc_dev.libs/libzstd-a1561916.so.1.4.8'):
             self.assertTrue(wheel_check.allowed(name, dist), name)
 
-    def check_publication(self, damage=None):
+    def test_native_target_boundary(self):
+        arm, x86 = get_target('cp310-aarch64'), get_target('cp311-x86_64')
+        dist = 'pyasc_dev-1.1.1.dev1.dist-info'
+        self.assertTrue(wheel_check.allowed(x86['native'], dist, x86))
+        self.assertFalse(wheel_check.allowed(arm['native'], dist, x86))
+        self.assertFalse(wheel_check.allowed(x86['native'], dist, arm))
+
+    def test_select_only_requested_target_artifact(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'output'
+            for name in ('cp310-aarch64', 'cp311-x86_64'):
+                artifacts = [{'name': 'wheel-source-recipe-' + artifact_suffix(get_target(t)), 'expired': False}
+                             for t in ('cp310-aarch64', 'cp311-x86_64')]
+                run = {'conclusion': 'success', 'head_branch': 'main', 'path': '.github/workflows/wheels.yml', 'event': 'push'}
+                with patch.dict(os.environ, {'BUILD_TARGET': name, 'PUBLISH_RUN_ID': '42', 'PUBLISH_SHA256': 'b'*64,
+                                             'GITHUB_REPOSITORY': 'owner/wheels', 'GITHUB_OUTPUT': str(output)}), \
+                     patch.object(publish, 'api', side_effect=[run, {'artifacts': artifacts}]):
+                    publish.resolve()
+                self.assertEqual(output.read_text().splitlines()[-1], 'artifact=wheel-source-recipe-' + artifact_suffix(get_target(name)))
+
+    def check_publication(self, damage=None, target_name='cp310-aarch64'):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             artifact = root / 'artifact'
             artifact.mkdir()
-            name = 'pyasc_dev-1.1.1.dev1-cp310-cp310-manylinux_2_35_aarch64.whl'
+            name = 'pyasc_dev-1.1.1.dev1-' + wheel_tag(get_target(target_name)) + '.whl'
             content = b'exact qualified bytes'
             checksum = hashlib.sha256(content).hexdigest()
             (artifact / name).write_bytes(content)
             passport = {'wheel': name, 'wheel_sha256': checksum, 'run_id': '42',
-                        'source_repository': 'compiler-team-ru/pyasc'}
+                        'source_repository': 'compiler-team-ru/pyasc', 'target': target_name}
             (artifact / 'build-passport.json').write_text(json.dumps(passport))
             (artifact / 'SHA256SUMS').write_text(''.join(
                 hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n'
                 for p in sorted(artifact.iterdir())))
+            if damage == 'target':
+                target_name = 'cp311-x86_64' if target_name == 'cp310-aarch64' else 'cp310-aarch64'
             if damage == 'bytes':
                 (artifact / name).write_bytes(b'different bytes')
             if damage == 'extra':
@@ -86,7 +110,7 @@ class RecipeTests(unittest.TestCase):
             original = Path.cwd()
             try:
                 os.chdir(root)
-                with patch.dict(os.environ, {'PUBLISH_RUN_ID': '42', 'PUBLISH_SHA256': checksum}):
+                with patch.dict(os.environ, {'PUBLISH_RUN_ID': '42', 'PUBLISH_SHA256': checksum, 'BUILD_TARGET': target_name}):
                     publish.check()
                 self.assertEqual((root / 'dist' / name).read_bytes(), content)
                 self.assertEqual(len(list((root / 'dist').iterdir())), 1)
@@ -94,11 +118,16 @@ class RecipeTests(unittest.TestCase):
                 os.chdir(original)
 
     def test_publish_exact_bytes_only(self):
-        self.check_publication()
+        for target in ('cp310-aarch64', 'cp311-x86_64'):
+            self.check_publication(target_name=target)
 
     def test_reject_changed_wheel(self):
         with self.assertRaises(AssertionError):
             self.check_publication('bytes')
+
+    def test_reject_wrong_publication_target(self):
+        with self.assertRaises(AssertionError):
+            self.check_publication('target')
 
     def test_reject_extra_artifact_file(self):
         with self.assertRaises(AssertionError):

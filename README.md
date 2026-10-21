@@ -6,11 +6,18 @@ install `pyasc` and `pyasc-dev` together.
 
 ## Install
 
-The initial wheel supports **CPython 3.10, Linux AArch64, glibc 2.35 or newer**.
-No x86-64, macOS, Windows, or other Python wheels are provided yet.
+Wheels support **glibc 2.35 or newer** on these Linux targets:
+
+| Architecture | Python |
+| --- | --- |
+| AArch64 | CPython 3.10 |
+| x86_64 | CPython 3.11 |
+
+Use the matching interpreter below. Other Python/architecture combinations,
+macOS, and Windows are not provided.
 
 ```bash
-python3.10 -m venv .venv
+python3.11 -m venv .venv  # Use python3.10 on AArch64.
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install --pre pyasc-dev
@@ -19,7 +26,7 @@ python -c 'from asc.experimental import asctile; print(asctile.__file__)'
 
 CANN is required to compile and execute kernels and is installed separately.
 Kernel execution also needs a C++17 compiler and matching Python headers
-(`g++` and `python3.10-dev` on Ubuntu 22.04).
+(`g++` and the development headers for the selected Python interpreter).
 The initial runtime smoke uses CANN 9.0.0 and the Ascend950PR_9599 simulator.
 This is a development release, not broad numerical or hardware qualification.
 
@@ -28,20 +35,23 @@ This is a development release, not broad numerical or hardware qualification.
 GitHub Actions checks the default branch of
 [compiler-team-ru/pyasc](https://github.com/compiler-team-ru/pyasc) hourly and
 supports manual dispatch. The GitCode-to-GitHub mirror is maintained separately.
-Each build records an exact source SHA and uses `PYASC_SETUP_EXPERIMENTAL=1`.
+Both targets share an exact source SHA and a development version per run.
+Each build uses `PYASC_SETUP_EXPERIMENTAL=1`.
 An unchanged source and recipe are skipped while a successful artifact remains
 available. Artifacts expire after 90 days.
 
 The builder uses Ubuntu 22.04 and the exact LLVM archive in
 [`ci/toolchain.json`](https://github.com/compiler-team-ru/pyasc-wheels/blob/main/ci/toolchain.json), as specified by the selected PyAsc
-source instructions. A changed LLVM download URL stops the build for review.
+source instructions. Each architecture has its own pinned archive. A changed
+LLVM download URL stops the build for review. The x86_64 builder compiles
+CPython 3.11 from a checksum-pinned official source archive.
 
 Only the package description and required LLVM/zstd license notices are added
 to the exported source. Compiler and runtime code are unchanged. `auditwheel`
 checks the ABI and bundles zstd. The resulting wheel is checked for unexpected
 files and installed in two fresh environments outside the source directory.
 
-Each artifact contains exactly one wheel, `build-passport.json`, and
+Each target artifact contains exactly one wheel, `build-passport.json`, and
 `SHA256SUMS`. Build trees, caches, logs, SDKs, and source checkouts are excluded.
 The passport records build inputs and the actual scope of checks. The wheel
 metadata also records the source, LLVM, and recipe identifiers, so provenance
@@ -50,7 +60,8 @@ survives artifact expiration.
 ## Publish
 
 Scheduled builds never publish. To publish a checked artifact, manually run
-`wheels.yml` with its successful build run ID and the wheel's full SHA256.
+`wheels.yml` with its successful build run ID, `publish_target`, and the wheel's
+full SHA256. Publish each qualified target separately.
 The publishing job downloads and verifies that artifact; it does not rebuild it.
 
 Trusted Publisher settings:

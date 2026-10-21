@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from target import get_target, wheel_tag
 
 PACKAGES = {
     "asc", "asc/_C", "asc/codegen", "asc/common", "asc/experimental",
@@ -21,7 +22,6 @@ PACKAGES = {
 }
 CPP = {"asc/lib/host/bindings/" + n + ".cpp" for n in ("Enums", "MatmulApiTiling", "Module", "Platform")}
 CPP |= {"asc/lib/runtime/" + n + ".cpp" for n in ("npu_utils", "print_utils", "rt_wrapper")}
-NATIVE = "asc/_C/libpyasc.cpython-310-aarch64-linux-gnu.so"
 DIST_FILES = {"METADATA", "WHEEL", "RECORD", "top_level.txt", "licenses/LICENSE", "licenses/LICENSE-LLVM.txt", "licenses/LICENSE-ZSTD.txt", "sboms/auditwheel.cdx.json"}
 
 
@@ -29,16 +29,19 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def allowed(name, dist):
+def allowed(name, dist, target=None):
+    target = target or get_target()
     if name.startswith(dist + "/"):
         return name[len(dist) + 1:] in DIST_FILES
     if re.fullmatch(r"pyasc_dev.libs/libzstd-[0-9a-f]+\.so\.1\.4\.8", name):
         return True
     path = Path(name)
-    return name in CPP or name == NATIVE or (path.suffix == ".py" and path.parent.as_posix() in PACKAGES)
+    return name in CPP or name == target['native'] or (path.suffix == ".py" and path.parent.as_posix() in PACKAGES)
 
 
 def audit(wheel, version):
+    target = get_target()
+    native_name = target['native']
     dist = f"pyasc_dev-{version}.dist-info"
     with zipfile.ZipFile(wheel) as archive:
         members = archive.namelist()
@@ -48,10 +51,10 @@ def audit(wheel, version):
         assert all(n in parents for n in members if n.endswith('/')), "Unexpected empty directory"
         assert len(names) == len(set(names)), "Duplicate ZIP members"
         assert all(allowed(n, dist) for n in names), "Unexpected file in wheel: " + repr([n for n in names if not allowed(n, dist)])
-        assert {NATIVE, "asc/experimental/asctile/__init__.py", *(dist + "/" + n for n in DIST_FILES)} <= set(names), "Missing package or license metadata"
+        assert {native_name, "asc/experimental/asctile/__init__.py", *(dist + "/" + n for n in DIST_FILES)} <= set(names), "Missing package or license metadata"
         metadata = BytesParser().parsebytes(archive.read(f"{dist}/METADATA"))
         assert metadata["Name"] == "pyasc-dev" and metadata["Version"] == version
-        assert "Tag: cp310-cp310-manylinux_2_35_aarch64" in archive.read(f"{dist}/WHEEL").decode()
+        assert "Tag: " + wheel_tag(target) in archive.read(f"{dist}/WHEEL").decode()
         records = list(csv.reader(io.StringIO(archive.read(f"{dist}/RECORD").decode())))
         assert len(records) == len(names) and {r[0] for r in records} == set(names)
         for name, checksum, size in records:
@@ -61,11 +64,12 @@ def audit(wheel, version):
                 data = archive.read(name)
                 actual = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode()
                 assert checksum == "sha256=" + actual and int(size) == len(data), name
-        native = archive.read(NATIVE)
+        native = archive.read(native_name)
     return {"wheel_sha256": digest(wheel), "files": len(names), "native_sha256": hashlib.sha256(native).hexdigest()}, native
 
 
 def main():
+    target = get_target()
     wheels = list(Path(sys.argv[1]).glob("*.whl"))
     assert len(wheels) == 1
     wheel = wheels[0]
@@ -77,7 +81,8 @@ def main():
     paths = re.findall(r"\((?:RPATH|RUNPATH)\).*?\[([^\]]+)\]", dynamic)
     assert paths == ["$ORIGIN/../../pyasc_dev.libs"], paths
     needed = re.findall(r"Shared library: \[([^\]]+)\]", dynamic)
-    assert {n for n in needed if not re.fullmatch(r"libzstd-[0-9a-f]+\.so\.1\.4\.8", n)} <= {"libm.so.6", "libz.so.1", "libstdc++.so.6", "libgcc_s.so.1", "libc.so.6", "ld-linux-aarch64.so.1"}, needed
+    loader = {'aarch64': 'ld-linux-aarch64.so.1', 'x86_64': 'ld-linux-x86-64.so.2'}[target['arch']]
+    assert {n for n in needed if not re.fullmatch(r"libzstd-[0-9a-f]+\.so\.1\.4\.8", n)} <= {"libm.so.6", "libz.so.1", "libstdc++.so.6", "libgcc_s.so.1", "libc.so.6", loader}, needed
     result["native_dependencies"] = needed
     if "--finish" not in sys.argv:
         Path("/work/audit.json").write_text(json.dumps(result))
@@ -92,8 +97,8 @@ def main():
         **source, "version": version, "wheel": wheel.name, **result,
         "source_archive_sha256": digest(Path("/work/source.tar")),
         "builder_image_id": os.environ["BUILDER_IMAGE_ID"],
-        "base_image": "ubuntu@sha256:88881eb36da489f9ff8746ece8048ca16cc94f80e8cd3ae7e8335d8822631591",
-        "llvm": json.loads(Path("/recipe/ci/toolchain.json").read_text()),
+        "target": target['id'], "base_image": target['base_image'],
+        "llvm": target,
         "packaging_overlay": "README.md and third-party license notices only; compiler source unchanged",
         "package_description_sha256": digest(Path("/work/source/README.md")),
         "auditwheel": Path("/work/auditwheel.txt").read_text(),
