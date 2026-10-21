@@ -42,7 +42,9 @@ with Path('/work/source/README.md').open('a') as description:
         description.write(f"\nRecipe commit: `{source['recipe_commit']}` in `compiler-team-ru/pyasc-wheels`.\n")
 PYTHON
 cp /opt/licenses/LLVM.txt /work/source/LICENSE-LLVM.txt
-cp /usr/share/doc/libzstd1/copyright /work/source/LICENSE-ZSTD.txt
+if [ "$BUILD_TARGET" = cp310-aarch64 ]; then
+  cp /usr/share/doc/libzstd1/copyright /work/source/LICENSE-ZSTD.txt
+fi
 export PYASC_SETUP_NAME=pyasc-dev PYASC_SETUP_EXPERIMENTAL=1
 export SETUPTOOLS_SCM_PRETEND_VERSION="$WHEEL_VERSION" PYASC_SETUP_VERSION="$WHEEL_VERSION"
 export PYASC_SETUP_JOBS=1 PYASC_SETUP_COMPILER=g++
@@ -52,7 +54,7 @@ unset PYTHONPATH PYTHONHOME
 python -m pip wheel -v --no-build-isolation --no-deps -w /work/raw /work/source
 python -m pip download --only-binary=:all: --dest /work/dependencies \
   pybind11==2.10.3 numpy==1.26.4 typing_extensions==4.16.0
-auditwheel repair --plat "manylinux_2_35_$(uname -m)" --wheel-dir /work/wheels /work/raw/*.whl
+auditwheel repair --plat "$(python -c 'import sys; sys.path.insert(0,"/recipe/ci"); from target import get_target; print(get_target()["platform"])')" --wheel-dir /work/wheels /work/raw/*.whl
 auditwheel show /work/wheels/*.whl > /work/auditwheel.txt
 python /recipe/ci/check-wheel.py /work/wheels
 for leg in 'clean project A' 'clean project B'; do

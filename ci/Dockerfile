@@ -1,4 +1,4 @@
-# Ubuntu 22.04. No CANN, installed PyAsc, torch, agents, or source checkout.
+# Ubuntu 22.04 (AArch64) or 24.04 (x86_64). No CANN, installed PyAsc, torch, agents, or source checkout.
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 ARG BUILD_TARGET
@@ -9,7 +9,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && rm -rf /var/lib/apt/lists/*
 COPY ci/toolchain.json ci/target.py /opt/recipe/
 RUN python3 -c 'import sys,json; sys.path.insert(0,"/opt/recipe"); from target import get_target; json.dump(get_target(),open("/opt/toolchain.json","w"))'
-# CPython 3.11 is built from the official, checksum-pinned source on Ubuntu 22.04.
+# CPython 3.11 is built from the official, checksum-pinned source on Ubuntu 24.04.
 # Keep this interpreter private to the builder; it is not included in the wheel.
 RUN if [ "$BUILD_TARGET" = cp311-x86_64 ]; then \
       apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \

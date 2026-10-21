@@ -6,12 +6,12 @@ install `pyasc` and `pyasc-dev` together.
 
 ## Install
 
-Wheels support **glibc 2.35 or newer** on these Linux targets:
+Wheels support these Linux targets:
 
-| Architecture | Python |
-| --- | --- |
-| AArch64 | CPython 3.10 |
-| x86_64 | CPython 3.11 |
+| Architecture | Python | Minimum glibc |
+| --- | --- | --- |
+| AArch64 | CPython 3.10 | 2.35 |
+| x86_64 | CPython 3.11 | 2.39 |
 
 Use the matching interpreter below. Other Python/architecture combinations,
 macOS, and Windows are not provided.
@@ -40,15 +40,17 @@ Each build uses `PYASC_SETUP_EXPERIMENTAL=1`.
 An unchanged source and recipe are skipped while a successful artifact remains
 available. Artifacts expire after 90 days.
 
-The builder uses Ubuntu 22.04 and the exact LLVM archive in
+The builders use Ubuntu 22.04 for AArch64 and Ubuntu 24.04 for x86_64,
+with the exact LLVM archive in
 [`ci/toolchain.json`](https://github.com/compiler-team-ru/pyasc-wheels/blob/main/ci/toolchain.json), as specified by the selected PyAsc
-source instructions. Each architecture has its own pinned archive. A changed
+source instructions. The x86_64 LLVM archive requires a newer glibc than Ubuntu
+22.04 provides. Each architecture has its own pinned archive. A changed
 LLVM download URL stops the build for review. The x86_64 builder compiles
 CPython 3.11 from a checksum-pinned official source archive.
 
 Only the package description and required LLVM/zstd license notices are added
 to the exported source. Compiler and runtime code are unchanged. `auditwheel`
-checks the ABI and bundles zstd. The resulting wheel is checked for unexpected
+checks the ABI and bundles zstd for the AArch64 build that needs it. The resulting wheel is checked for unexpected
 files and installed in two fresh environments outside the source directory.
 
 Each target artifact contains exactly one wheel, `build-passport.json`, and

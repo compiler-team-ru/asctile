@@ -22,7 +22,17 @@ PACKAGES = {
 }
 CPP = {"asc/lib/host/bindings/" + n + ".cpp" for n in ("Enums", "MatmulApiTiling", "Module", "Platform")}
 CPP |= {"asc/lib/runtime/" + n + ".cpp" for n in ("npu_utils", "print_utils", "rt_wrapper")}
-DIST_FILES = {"METADATA", "WHEEL", "RECORD", "top_level.txt", "licenses/LICENSE", "licenses/LICENSE-LLVM.txt", "licenses/LICENSE-ZSTD.txt", "sboms/auditwheel.cdx.json"}
+DIST_FILES = {"METADATA", "WHEEL", "RECORD", "top_level.txt", "licenses/LICENSE", "licenses/LICENSE-LLVM.txt"}
+
+
+def dist_files(target):
+    extra = {"licenses/LICENSE-ZSTD.txt", "sboms/auditwheel.cdx.json"} if target['zstd_soname'] else set()
+    return DIST_FILES | extra
+
+
+def is_zstd(name, target):
+    return bool(target['zstd_soname'] and re.fullmatch(
+        r"libzstd-[0-9a-f]+\.so\." + re.escape(target['zstd_soname']), name))
 
 
 def digest(path):
@@ -32,8 +42,8 @@ def digest(path):
 def allowed(name, dist, target=None):
     target = target or get_target()
     if name.startswith(dist + "/"):
-        return name[len(dist) + 1:] in DIST_FILES
-    if re.fullmatch(r"pyasc_dev.libs/libzstd-[0-9a-f]+\.so\.1\.4\.8", name):
+        return name[len(dist) + 1:] in dist_files(target)
+    if name.startswith("pyasc_dev.libs/") and is_zstd(name.removeprefix("pyasc_dev.libs/"), target):
         return True
     path = Path(name)
     return name in CPP or name == target['native'] or (path.suffix == ".py" and path.parent.as_posix() in PACKAGES)
@@ -51,7 +61,7 @@ def audit(wheel, version):
         assert all(n in parents for n in members if n.endswith('/')), "Unexpected empty directory"
         assert len(names) == len(set(names)), "Duplicate ZIP members"
         assert all(allowed(n, dist) for n in names), "Unexpected file in wheel: " + repr([n for n in names if not allowed(n, dist)])
-        assert {native_name, "asc/experimental/asctile/__init__.py", *(dist + "/" + n for n in DIST_FILES)} <= set(names), "Missing package or license metadata"
+        assert {native_name, "asc/experimental/asctile/__init__.py", *(dist + "/" + n for n in dist_files(target))} <= set(names), "Missing package or license metadata"
         metadata = BytesParser().parsebytes(archive.read(f"{dist}/METADATA"))
         assert metadata["Name"] == "pyasc-dev" and metadata["Version"] == version
         assert "Tag: " + wheel_tag(target) in archive.read(f"{dist}/WHEEL").decode()
@@ -79,10 +89,10 @@ def main():
     native_path.write_bytes(native)
     dynamic = subprocess.check_output(["readelf", "-d", str(native_path)], text=True)
     paths = re.findall(r"\((?:RPATH|RUNPATH)\).*?\[([^\]]+)\]", dynamic)
-    assert paths == ["$ORIGIN/../../pyasc_dev.libs"], paths
+    assert paths == (["$ORIGIN/../../pyasc_dev.libs"] if target["zstd_soname"] else []), paths
     needed = re.findall(r"Shared library: \[([^\]]+)\]", dynamic)
     loader = {'aarch64': 'ld-linux-aarch64.so.1', 'x86_64': 'ld-linux-x86-64.so.2'}[target['arch']]
-    assert {n for n in needed if not re.fullmatch(r"libzstd-[0-9a-f]+\.so\.1\.4\.8", n)} <= {"libm.so.6", "libz.so.1", "libstdc++.so.6", "libgcc_s.so.1", "libc.so.6", loader}, needed
+    assert {n for n in needed if not is_zstd(n, target)} <= {"libm.so.6", "libz.so.1", "libstdc++.so.6", "libgcc_s.so.1", "libc.so.6", loader}, needed
     result["native_dependencies"] = needed
     if "--finish" not in sys.argv:
         Path("/work/audit.json").write_text(json.dumps(result))

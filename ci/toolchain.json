@@ -9,7 +9,9 @@
     "python_tag": "cp310",
     "python_bin": "/usr/bin/python3",
     "native": "asc/_C/libpyasc.cpython-310-aarch64-linux-gnu.so",
-    "base_image": "ubuntu@sha256:88881eb36da489f9ff8746ece8048ca16cc94f80e8cd3ae7e8335d8822631591"
+    "base_image": "ubuntu@sha256:88881eb36da489f9ff8746ece8048ca16cc94f80e8cd3ae7e8335d8822631591",
+    "platform": "manylinux_2_35_aarch64",
+    "zstd_soname": "1.4.8"
   },
   "cp311-x86_64": {
     "version": "19.1.7",
@@ -21,8 +23,10 @@
     "python_tag": "cp311",
     "python_bin": "/opt/python/bin/python3.11",
     "native": "asc/_C/libpyasc.cpython-311-x86_64-linux-gnu.so",
-    "base_image": "ubuntu@sha256:98510ac07bb4545e389be502a8918b385c018bfe4ceeb5ac7e0375c782268b04",
+    "base_image": "ubuntu@sha256:a2d43bffc46670d7108bb3c0468c67c5557c4c92e83e1e34cbff1322ad1b94dc",
     "python_source_url": "https://www.python.org/ftp/python/3.11.17/Python-3.11.17.tar.xz",
-    "python_source_sha256": "bfb74ad39efae27cda510f134ab408e00f9992c56851cfc0b1cdb5646da11599"
+    "python_source_sha256": "bfb74ad39efae27cda510f134ab408e00f9992c56851cfc0b1cdb5646da11599",
+    "platform": "manylinux_2_39_x86_64",
+    "zstd_soname": null
   }
 }

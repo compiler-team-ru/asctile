@@ -63,8 +63,16 @@ class RecipeTests(unittest.TestCase):
         dist = 'pyasc_dev-1.1.1.dev1.dist-info'
         for name in ('asc/runtime/__pycache__/jit.pyc', 'asc/token.txt', 'asc/../../secret.py', 'tests/test.py', 'build/native.so', dist + '/credentials.json'):
             self.assertFalse(wheel_check.allowed(name, dist), name)
-        for name in ('asc/runtime/jit.py', get_target()['native'], dist + '/licenses/LICENSE', 'pyasc_dev.libs/libzstd-a1561916.so.1.4.8'):
+        for name in ('asc/runtime/jit.py', get_target()['native'], dist + '/licenses/LICENSE'):
             self.assertTrue(wheel_check.allowed(name, dist), name)
+
+    def test_bundled_library_boundary(self):
+        dist = 'pyasc_dev-1.1.1.dev1.dist-info'
+        arm, x86 = get_target('cp310-aarch64'), get_target('cp311-x86_64')
+        for name in ('pyasc_dev.libs/libzstd-a1561916.so.1.4.8', dist + '/licenses/LICENSE-ZSTD.txt', dist + '/sboms/auditwheel.cdx.json'):
+            self.assertTrue(wheel_check.allowed(name, dist, arm))
+            self.assertFalse(wheel_check.allowed(name, dist, x86))
+        self.assertFalse(wheel_check.allowed('pyasc_dev.libs/libzstd-a1561916.so.1.5.5', dist, arm))
 
     def test_native_target_boundary(self):
         arm, x86 = get_target('cp310-aarch64'), get_target('cp311-x86_64')

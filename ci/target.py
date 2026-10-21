@@ -13,8 +13,8 @@ def get_target(name=None):
 
 
 def wheel_tag(target):
-    return f"{target['python_tag']}-{target['python_tag']}-manylinux_2_35_{target['arch']}"
+    return f"{target['python_tag']}-{target['python_tag']}-{target['platform']}"
 
 
 def artifact_suffix(target):
-    return f"{target['python_tag']}-manylinux-2-35-{target['arch']}"
+    return target["python_tag"] + "-" + target["platform"].replace("_", "-", 3)
