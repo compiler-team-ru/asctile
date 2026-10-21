@@ -54,7 +54,7 @@ unset PYTHONPATH PYTHONHOME
 python -m pip wheel -v --no-build-isolation --no-deps -w /work/raw /work/source
 python -m pip download --only-binary=:all: --dest /work/dependencies \
   pybind11==2.10.3 numpy==1.26.4 typing_extensions==4.16.0
-auditwheel repair --plat "$(python -c 'import sys; sys.path.insert(0,"/recipe/ci"); from target import get_target; print(get_target()["platform"])')" --wheel-dir /work/wheels /work/raw/*.whl
+auditwheel repair --only-plat --plat "$(python -c 'import sys; sys.path.insert(0,"/recipe/ci"); from target import get_target; print(get_target()["platform"])')" --wheel-dir /work/wheels /work/raw/*.whl
 auditwheel show /work/wheels/*.whl > /work/auditwheel.txt
 python /recipe/ci/check-wheel.py /work/wheels
 for leg in 'clean project A' 'clean project B'; do
