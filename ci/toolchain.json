@@ -31,5 +31,22 @@
     "source_repository": "https://github.com/llvm/llvm-project.git",
     "build_method": "verified archive",
     "upstream_archive_url": "https://cann-ai.obs.cn-north-4.myhuaweicloud.com/llvm/llvm-19.1.7-x86_64.tar.xz"
+  },
+  "cp310-x86_64": {
+    "version": "19.1.7",
+    "archive_url": "https://github.com/compiler-team-ru/asctile/releases/download/llvm-cd708029-ubuntu22-x86_64-v1/llvm-cd708029-ubuntu22-x86_64.tar.xz",
+    "archive_sha256": "28fa3ab4cab1d973819b2ce5bccb1b32ea9ddce2cf243dd672b9b6108342ecff",
+    "source_instructions": "experimental/asctile/docs/installation/build-from-source.rst",
+    "revision": "cd708029e0b2869e80abe31ddb175f7c35361f90",
+    "arch": "x86_64",
+    "python_tag": "cp310",
+    "python_bin": "/usr/bin/python3",
+    "native": "asc/_C/libpyasc.cpython-310-x86_64-linux-gnu.so",
+    "base_image": "ubuntu@sha256:98510ac07bb4545e389be502a8918b385c018bfe4ceeb5ac7e0375c782268b04",
+    "platform": "manylinux_2_35_x86_64",
+    "zstd_soname": null,
+    "source_repository": "https://github.com/llvm/llvm-project.git",
+    "build_method": "verified archive",
+    "upstream_archive_url": "https://cann-ai.obs.cn-north-4.myhuaweicloud.com/llvm/llvm-19.1.7-x86_64.tar.xz"
   }
 }

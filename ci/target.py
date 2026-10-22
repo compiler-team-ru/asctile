@@ -1,4 +1,4 @@
-"""The two explicitly supported wheel targets."""
+"""The explicitly supported wheel targets."""
 import json
 import os
 from pathlib import Path

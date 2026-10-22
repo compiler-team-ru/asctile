@@ -11,13 +11,13 @@ Wheels support these Linux targets:
 | Architecture | Python | Minimum glibc |
 | --- | --- | --- |
 | AArch64 | CPython 3.10 | 2.35 |
-| x86_64 | CPython 3.11 | 2.35 |
+| x86_64 | CPython 3.10, 3.11 | 2.35 |
 
 Use the matching interpreter below. Other Python/architecture combinations,
 macOS, and Windows are not provided.
 
 ```bash
-python3.11 -m venv .venv  # Use python3.10 on AArch64.
+python3.10 -m venv .venv  # Python 3.11 is also supported on x86_64.
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install --pre pyasc-dev
@@ -35,12 +35,12 @@ This is a development release, not broad numerical or hardware qualification.
 GitHub Actions checks the default branch of
 [compiler-team-ru/pyasc](https://github.com/compiler-team-ru/pyasc) hourly and
 supports manual dispatch. The GitCode-to-GitHub mirror is maintained separately.
-Both targets share an exact source SHA and a development version per run.
+All targets share an exact source SHA and a development version per run.
 Each build uses `PYASC_SETUP_EXPERIMENTAL=1`.
 An unchanged source and recipe are skipped while a successful artifact remains
 available. Artifacts expire after 90 days.
 
-Both builders use Ubuntu 22.04 and checksum-pinned LLVM archives from
+All builders use Ubuntu 22.04 and checksum-pinned LLVM archives from
 [`ci/toolchain.json`](https://github.com/compiler-team-ru/asctile/blob/main/ci/toolchain.json).
 The AArch64 archive comes from upstream. The x86_64 archive is stored in
 [a GitHub Release](https://github.com/compiler-team-ru/asctile/releases/tag/llvm-cd708029-ubuntu22-x86_64-v1),
@@ -56,8 +56,8 @@ cached layers when available and produces an archive, passport, and checksums
 for review before creating a new toolchain release. Release assets are not replaced.
 
 A changed upstream LLVM download URL stops wheel builds for review. PyAsc uses
-GCC with its matching linker. The x86_64 builder compiles CPython 3.11 from a
-checksum-pinned official archive. Docker layers are cached; the LLVM release
+GCC with its matching linker. CPython 3.10 uses Ubuntu 22.04 system packages.
+The Python 3.11 builder uses a checksum-pinned official archive. Docker layers are cached; the LLVM release
 remains available independently of that cache. No build trees enter the wheel.
 
 Only the package description and required LLVM/zstd license notices are added

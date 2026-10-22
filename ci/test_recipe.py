@@ -72,7 +72,7 @@ class RecipeTests(unittest.TestCase):
             return json.loads((root / 'source.json').read_text())['build']
 
     def test_skip_successful_artifact(self):
-        for target in ('cp310-aarch64', 'cp311-x86_64'):
+        for target in ('cp310-aarch64', 'cp311-x86_64', 'cp310-x86_64'):
             self.assertFalse(self.resolve_case(target_name=target))
 
     def test_retry_failed_build(self):
@@ -105,18 +105,19 @@ class RecipeTests(unittest.TestCase):
         self.assertFalse(wheel_check.allowed('pyasc_dev.libs/libzstd-a1561916.so.1.5.5', dist, arm))
 
     def test_native_target_boundary(self):
-        arm, x86 = get_target('cp310-aarch64'), get_target('cp311-x86_64')
+        targets = [get_target(name) for name in ('cp310-aarch64', 'cp311-x86_64', 'cp310-x86_64')]
         dist = 'pyasc_dev-1.1.1.dev1.dist-info'
-        self.assertTrue(wheel_check.allowed(x86['native'], dist, x86))
-        self.assertFalse(wheel_check.allowed(arm['native'], dist, x86))
-        self.assertFalse(wheel_check.allowed(x86['native'], dist, arm))
+        for target in targets:
+            for other in targets:
+                self.assertEqual(wheel_check.allowed(other['native'], dist, target),
+                                 target['id'] == other['id'])
 
     def test_select_only_requested_target_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'output'
-            for name in ('cp310-aarch64', 'cp311-x86_64'):
+            for name in ('cp310-aarch64', 'cp311-x86_64', 'cp310-x86_64'):
                 artifacts = [{'name': 'wheel-source-recipe-' + artifact_suffix(get_target(t)), 'expired': False}
-                             for t in ('cp310-aarch64', 'cp311-x86_64')]
+                             for t in ('cp310-aarch64', 'cp311-x86_64', 'cp310-x86_64')]
                 run = {'conclusion': 'success', 'head_branch': 'main', 'path': '.github/workflows/wheels.yml', 'event': 'push'}
                 with patch.dict(os.environ, {'BUILD_TARGET': name, 'PUBLISH_RUN_ID': '42', 'PUBLISH_SHA256': 'b'*64,
                                              'GITHUB_REPOSITORY': 'owner/wheels', 'GITHUB_OUTPUT': str(output)}), \
@@ -156,7 +157,7 @@ class RecipeTests(unittest.TestCase):
                 os.chdir(original)
 
     def test_publish_exact_bytes_only(self):
-        for target in ('cp310-aarch64', 'cp311-x86_64'):
+        for target in ('cp310-aarch64', 'cp311-x86_64', 'cp310-x86_64'):
             self.check_publication(target_name=target)
 
     def test_reject_changed_wheel(self):
