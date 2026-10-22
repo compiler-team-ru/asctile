@@ -74,7 +74,7 @@ def main():
                 break
     manifest = {"source_repository": SOURCE, "default_branch": branch, "source_sha": sha,
                 "commit_time": commit["commit"]["committer"]["date"], "recipe_sha256": recipe,
-                "artifact": artifact, "build": build, "recipe_commit": os.environ.get("GITHUB_SHA"), "target": target['id']}
+                "artifact": artifact, "build": build, "recipe_commit": os.environ.get("GITHUB_SHA"), "recipe_repository": os.environ.get("GITHUB_REPOSITORY"), "target": target['id']}
     (root / "source.json").write_text(json.dumps(manifest, indent=2) + "\n")
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
         for key, value in {"sha": sha, "artifact": artifact, "build": str(build).lower(), "base_image": target['base_image']}.items():
