@@ -1,4 +1,4 @@
-# Ubuntu 22.04 (AArch64) or 24.04 (x86_64). No CANN, installed PyAsc, torch, agents, or source checkout.
+# Ubuntu 22.04. No CANN, installed PyAsc, torch, agents, or source checkout.
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 ARG BUILD_TARGET
@@ -9,7 +9,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && rm -rf /var/lib/apt/lists/*
 COPY ci/toolchain.json ci/target.py /opt/recipe/
 RUN python3 -c 'import sys,json; sys.path.insert(0,"/opt/recipe"); from target import get_target; json.dump(get_target(),open("/opt/toolchain.json","w"))'
-# CPython 3.11 is built from the official, checksum-pinned source on Ubuntu 24.04.
+# CPython 3.11 is built from the official, checksum-pinned source on Ubuntu 22.04.
 # Keep this interpreter private to the builder; it is not included in the wheel.
 RUN if [ "$BUILD_TARGET" = cp311-x86_64 ]; then \
       apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -24,13 +24,8 @@ RUN if [ "$BUILD_TARGET" = cp311-x86_64 ]; then \
       && /opt/python/bin/python3.11 -c 'import ssl, ctypes, bz2, lzma, sqlite3, venv' \
       && cd / && rm -rf /tmp/python /tmp/python.tar.xz; \
     fi
-RUN curl --fail --location --connect-timeout 20 --max-time 900 \
-      "$(python3 -c 'import json; print(json.load(open("/opt/toolchain.json"))["archive_url"])')" \
-      -o /tmp/llvm.tar.xz \
-    && echo "$(python3 -c 'import json; print(json.load(open("/opt/toolchain.json"))["archive_sha256"])')  /tmp/llvm.tar.xz" | sha256sum -c - \
-    && mkdir /opt/llvm \
-    && tar -xJf /tmp/llvm.tar.xz -C /opt/llvm --strip-components=1 \
-    && rm /tmp/llvm.tar.xz
+COPY ci/install-llvm.sh /opt/recipe/install-llvm.sh
+RUN bash /opt/recipe/install-llvm.sh
 RUN mkdir /opt/licenses \
     && curl --fail --location --connect-timeout 20 --max-time 120 \
       https://raw.githubusercontent.com/llvm/llvm-project/cd708029e0b2869e80abe31ddb175f7c35361f90/llvm/LICENSE.TXT \

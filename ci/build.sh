@@ -36,7 +36,7 @@ llvm = json.loads(Path('/opt/toolchain.json').read_text())
 with Path('/work/source/README.md').open('a') as description:
     description.write('\n## Build provenance\n\n')
     description.write(f"Source: `{source['source_sha']}` in `{source['source_repository']}`.\n\n")
-    description.write(f"LLVM: `{llvm['revision']}`; archive SHA256: `{llvm['archive_sha256']}`.\n\n")
+    description.write(f"LLVM revision: `{llvm['revision']}`; build method: `{llvm.get('build_method', 'upstream archive')}`.\n\n")
     description.write(f"Recipe SHA256: `{source['recipe_sha256']}`.\n")
     if source.get('recipe_commit'):
         description.write(f"\nRecipe commit: `{source['recipe_commit']}` in `compiler-team-ru/pyasc-wheels`.\n")

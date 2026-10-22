@@ -11,7 +11,7 @@ Wheels support these Linux targets:
 | Architecture | Python | Minimum glibc |
 | --- | --- | --- |
 | AArch64 | CPython 3.10 | 2.35 |
-| x86_64 | CPython 3.11 | 2.39 |
+| x86_64 | CPython 3.11 | 2.35 |
 
 Use the matching interpreter below. Other Python/architecture combinations,
 macOS, and Windows are not provided.
@@ -40,13 +40,15 @@ Each build uses `PYASC_SETUP_EXPERIMENTAL=1`.
 An unchanged source and recipe are skipped while a successful artifact remains
 available. Artifacts expire after 90 days.
 
-The builders use Ubuntu 22.04 for AArch64 and Ubuntu 24.04 for x86_64,
-with the exact LLVM archive in
-[`ci/toolchain.json`](https://github.com/compiler-team-ru/pyasc-wheels/blob/main/ci/toolchain.json), as specified by the selected PyAsc
-source instructions. The x86_64 LLVM archive requires a newer glibc than Ubuntu
-22.04 provides. Each architecture has its own pinned archive. A changed
-LLVM download URL stops the build for review. The x86_64 builder compiles
-CPython 3.11 from a checksum-pinned official source archive.
+Both builders use Ubuntu 22.04 and the exact LLVM revision recorded in
+[`ci/toolchain.json`](https://github.com/compiler-team-ru/pyasc-wheels/blob/main/ci/toolchain.json).
+The AArch64 builder uses the checksum-pinned upstream archive. The x86_64
+builder recompiles that archive's LLVM revision with clang and lld on Ubuntu
+22.04 because the upstream binary archive requires a newer glibc. Docker build
+layers are cached between runs. PyAsc itself uses GCC with its matching linker.
+A changed upstream LLVM download URL stops the build for review.
+The x86_64 builder also compiles CPython 3.11 from a checksum-pinned official
+source archive. Neither LLVM nor CPython build trees are included in wheels.
 
 Only the package description and required LLVM/zstd license notices are added
 to the exported source. Compiler and runtime code are unchanged. `auditwheel`
