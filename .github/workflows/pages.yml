@@ -1,0 +1,91 @@
+name: GitHub Pages
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Mirror pyasc
+    types:
+      - completed
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Pages
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Initialize repository
+        uses: actions/checkout@v4
+        with:
+          repository: compiler-team-ru/pyasc
+          ref: v2
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          pip-install: -r requirements-build.txt
+      - name: Cache CANN
+        id: cache-cann
+        uses: actions/cache@v5
+        with:
+          path: cann.run
+          key: cann_9.2.0-beta.2_linux-x86_64
+      - name: Download CANN
+        if: steps.cache-cann.outputs.cache-hit != 'true'
+        run: |
+          wget -qO cann.run https://ascend-cann-open.obs.cn-north-4.myhuaweicloud.com/CANN/CANN%209.2.0-beta.2/Ascend-cann_9.2.0-beta.2_linux-x86_64.run
+      - name: Install CANN
+        run: |
+          printf 'y\ny\n2\n' | bash cann.run --full
+      - name: Cache LLVM
+        id: cache-llvm
+        uses: actions/cache@v5
+        with:
+          path: llvm
+          key: llvm-19.1.7-x86_64
+      - name: Download LLVM
+        if: steps.cache-llvm.outputs.cache-hit != 'true'
+        run: |
+          mkdir llvm
+          cd llvm
+          wget -qO llvm.tar.xz https://cann-ai.obs.cn-north-4.myhuaweicloud.com/llvm/llvm-19.1.7-x86_64.tar.xz
+          tar xf llvm.tar.xz --strip-components 1
+          rm llvm.tar.xz
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+      - name: Build with Sphinx
+        env:
+          LLVM_INSTALL_PREFIX: llvm
+          PYASC_SETUP_DOCS: 1
+          PYASC_SETUP_EXPERIMENTAL: 1
+        run: |
+          python3 -m pip install -e ".[docs]" -v
+          source ~/Ascend/cann/set_env.sh
+          cd experimental/asctile/docs
+          make html
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "experimental/asctile/docs/_build/html"
+
+  deploy:
+    name: Deploy Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

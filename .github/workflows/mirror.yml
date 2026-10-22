@@ -1,0 +1,44 @@
+name: Mirror pyasc
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-pyasc
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Mirror to GitHub
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_URL: https://gitcode.com/cann/pyasc.git
+      TARGET_URL: https://github.com/compiler-team-ru/pyasc.git
+      GITHUB_TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
+    steps:
+      - name: Configure Git authentication
+        run: |
+          git config --global credential.helper \
+            '!f() { echo username=x-access-token; echo password=${GITHUB_TOKEN}; }; f'
+
+      - name: Push master and tags
+        run: |
+          git clone --bare "$SOURCE_URL" pyasc.git
+          cd pyasc.git
+          git remote add github "$TARGET_URL"
+          git push --force github master --tags
+
+      - name: Update v2 from GitCode merge request
+        run: |
+          git clone "$TARGET_URL" pyasc-gh
+          cd pyasc-gh
+          git checkout -B v2
+          git remote add gitcode "$SOURCE_URL"
+          git fetch gitcode +refs/merge-requests/85/head:gcv2
+          git reset --hard gcv2
+          git push --force origin v2
