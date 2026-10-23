@@ -1,0 +1,84 @@
+name: Archive manylinux LLVM
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  archive:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            target: cp310-x86_64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            target: cp310-aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: recipe
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 23f0af9f801fb6cdcd877ccf4b14486bcd3f2f37
+          path: builder
+          persist-credentials: false
+      - id: base
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          base = json.loads(Path('builder/ci/toolchain.json').read_text())[os.environ['BUILD_TARGET']]['base_image']
+          with open(os.environ['GITHUB_OUTPUT'],'a') as out:
+              out.write('image=' + base + '\n')
+          PY
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: builder
+          file: builder/ci/Dockerfile
+          load: true
+          tags: llvm-export
+          build-args: |
+            BASE_IMAGE=${{ steps.base.outputs.image }}
+            BUILD_TARGET=${{ matrix.target }}
+          cache-from: type=gha,scope=builder-manylinux_2_28-${{ matrix.arch }}
+      - name: Check and archive
+        env:
+          LLVM_ARCH: ${{ matrix.arch }}
+        run: python3 recipe/ci/archive-toolchain.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: llvm-${{ matrix.arch }}
+          path: out/*
+          compression-level: 0
+          retention-days: 30
+  release:
+    needs: archive
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: llvm-*
+          path: out
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RECIPE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cd out
+          sha256sum -c llvm-x86_64.sha256
+          sha256sum -c llvm-aarch64.sha256
+          gh release create llvm-cd708029-manylinux_2_28-v1 ./* --target "$RECIPE_SHA"             --title 'LLVM cd708029 for manylinux 2.28'             --notes 'Exact PyAsc LLVM revision. Installed ELF files checked for GLIBC <= 2.28. Archives contain LLVM and its license only.'
