@@ -43,7 +43,7 @@ def main():
         assert job['status'] == 'completed'
         if job['conclusion'] == 'success':
             continue
-        log = subprocess.check_output(['gh', 'api', f'repos/{repo}/actions/jobs/{job["id"]}/logs'], text=True)
+        log = subprocess.check_output(['gh', 'api', '--allow-escape-sequences', f'repos/{repo}/actions/jobs/{job["id"]}/logs'], text=True)
         target, evidence = incompatible(job, log, next(iter(versions)))
         evidence['source_sha'] = next(iter(sources))
         result[target] = evidence
