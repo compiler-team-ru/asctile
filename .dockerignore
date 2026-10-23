@@ -5,3 +5,4 @@
 !ci/requirements-build.lock
 !ci/toolchain.json
 !ci/target.py
+!ci/install-llvm.sh

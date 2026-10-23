@@ -1,6 +1,11 @@
 name: Archive manylinux LLVM
 on:
   workflow_dispatch:
+    inputs:
+      verify_archives:
+        description: 'Verify current builders consume durable archives; do not rebuild or republish LLVM'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -26,7 +31,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 23f0af9f801fb6cdcd877ccf4b14486bcd3f2f37
+          ref: ${{ inputs.verify_archives && github.sha || '23f0af9f801fb6cdcd877ccf4b14486bcd3f2f37' }}
           path: builder
           persist-credentials: false
       - id: base
@@ -51,17 +56,23 @@ jobs:
             BASE_IMAGE=${{ steps.base.outputs.image }}
             BUILD_TARGET=${{ matrix.target }}
           cache-from: type=gha,scope=builder-manylinux_2_28-${{ matrix.arch }}
+      - name: Check downloaded toolchain
+        if: inputs.verify_archives
+        run: docker run --rm llvm-export bash -c 'test "$(/opt/llvm/bin/llvm-config --version)" = 19.1.7 && test -s /opt/licenses/LLVM.txt && /opt/build-venv/bin/python -m pip check'
       - name: Check and archive
+        if: '!inputs.verify_archives'
         env:
           LLVM_ARCH: ${{ matrix.arch }}
         run: python3 recipe/ci/archive-toolchain.py
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: '!inputs.verify_archives'
         with:
           name: llvm-${{ matrix.arch }}
           path: out/*
           compression-level: 0
           retention-days: 30
   release:
+    if: '!inputs.verify_archives'
     needs: archive
     runs-on: ubuntu-24.04
     permissions:
