@@ -105,3 +105,5 @@ wheel recipe, required LLVM revision, and all eight wheel filenames, URLs
 and SHA256 hashes. The manifest becomes complete only after every wheel
 has been downloaded from PyPI and verified. Container builders consume this
 manifest rather than resolving independent "latest" versions per target.
+
+Wheel builders download checksum-pinned LLVM archives from the `llvm-cd708029-manylinux_2_28-v1` release. The native `toolchains.yml` export retains the exact source-built toolchains independently of Python and CANN; wheel jobs never compile LLVM.
