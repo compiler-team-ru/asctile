@@ -70,7 +70,7 @@ def main():
         assert '404' in existing.stderr, existing.stderr
         subprocess.run(['gh', 'release', 'create', tag, str(path), '--repo', repo,
                         '--target', os.environ['GITHUB_SHA'], '--title', 'PyAsc wheels ' + manifest['version'],
-                        '--notes', 'Complete wheel set. Every file was downloaded from PyPI and verified by SHA256.'], check=True)
+                        '--notes', 'Complete target qualification. Every published wheel was downloaded from PyPI and verified by SHA256; incompatible targets are listed explicitly.'], check=True)
 
 
 if __name__ == '__main__':

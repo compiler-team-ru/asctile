@@ -5,6 +5,10 @@ on:
     - cron: '17 4 * * *'
   workflow_dispatch:
     inputs:
+      publish_run_id:
+        description: 'Publish retained qualified targets from an exact completed run; empty builds wheels'
+        type: string
+        default: ''
       source_sha:
         description: 'Exact mirror SHA; empty selects its current default branch'
         type: string
@@ -27,6 +31,7 @@ concurrency:
 
 jobs:
   source:
+    if: inputs.publish_run_id == ''
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.source.outputs.sha }}
@@ -164,7 +169,7 @@ jobs:
 
   publish:
     needs: [source, wheel]
-    if: needs.source.outputs.published != 'true' && github.ref == 'refs/heads/main'
+    if: always() && github.ref == 'refs/heads/main' && (inputs.publish_run_id != '' || (needs.source.result == 'success' && needs.source.outputs.published != 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -187,10 +192,22 @@ jobs:
           path: artifacts
           pattern: wheel-*
           merge-multiple: false
-          run-id: ${{ github.run_id }}
+          run-id: ${{ inputs.publish_run_id || github.run_id }}
           github-token: ${{ github.token }}
-      - name: Verify and collect all target wheels
-        run: python3 ci/publish-all.py artifacts dist published.json
+      - name: Reconcile target qualification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUALIFY_RUN_ID: ${{ inputs.publish_run_id || github.run_id }}
+        run: python3 ci/qualification.py artifacts "$QUALIFY_RUN_ID" incompatible.json
+      - name: Verify and collect qualified target wheels
+        run: |
+          python3 ci/publish-all.py artifacts dist published.json incompatible.json
+          python3 - <<'PYTHON'
+          import json, os
+          p = json.load(open('published.json'))
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('PUBLISH_ARTIFACT=published-' + p['source_sha'] + '-' + p['recipe_sha256'][:16] + '\n')
+          PYTHON
       - name: Reconcile existing PyPI files
         run: python3 ci/publication.py preflight published.json
       - name: Publish to PyPI

@@ -17,13 +17,15 @@ def digest(path):
 
 
 def main():
-    if len(sys.argv) != 4:
-        raise SystemExit('usage: publish-all.py ARTIFACTS_DIR DIST_DIR MANIFEST_PATH')
+    if len(sys.argv) not in (4, 5):
+        raise SystemExit('usage: publish-all.py ARTIFACTS_DIR DIST_DIR MANIFEST_PATH [INCOMPATIBILITIES_JSON]')
     artifacts = Path(sys.argv[1])
     dist = Path(sys.argv[2])
     manifest_path = Path(sys.argv[3])
     directories = sorted(path for path in artifacts.iterdir() if path.is_dir())
-    assert len(directories) == 8, f'Expected eight target artifacts, found {len(directories)}'
+    incompatible = json.loads(Path(sys.argv[4]).read_text()) if len(sys.argv) == 5 else {}
+    assert set(incompatible) <= {'cp39-x86_64', 'cp39-aarch64'}
+    assert len(directories) + len(incompatible) == 8, 'Incomplete target qualification'
 
     versions = set()
     source_shas = set()
@@ -73,7 +75,11 @@ def main():
     assert len(source_shas) == 1, 'All target wheels must share one source SHA'
     assert len(recipe_shas) == 1, 'All target wheels must share one recipe SHA'
     assert len(run_ids) == 1, 'All target wheels must come from one run'
-    assert len(targets) == 8
+    expected = {f'cp{p}-{a}' for p in ('39', '310', '311', '312') for a in ('x86_64', 'aarch64')}
+    assert not set(targets) & set(incompatible)
+    assert set(targets) | set(incompatible) == expected
+    assert all(e['source_sha'] == next(iter(source_shas)) and e['status'] == 'incompatible'
+               and e['job_url'] and e['log_sha256'] for e in incompatible.values())
 
     manifest = {
         'version': next(iter(versions)),
@@ -82,7 +88,8 @@ def main():
         'run_id': next(iter(run_ids)),
         'targets': targets,
         'wheels': wheels_manifest,
-        'schema_version': 1,
+        'schema_version': 2,
+        'incompatible_targets': incompatible,
         'source_repository': 'compiler-team-ru/pyasc',
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')

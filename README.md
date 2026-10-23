@@ -107,3 +107,9 @@ has been downloaded from PyPI and verified. Container builders consume this
 manifest rather than resolving independent "latest" versions per target.
 
 Wheel builders download checksum-pinned LLVM archives from the `llvm-cd708029-manylinux_2_28-v1` release. The native `toolchains.yml` export retains the exact source-built toolchains independently of Python and CANN; wheel jobs never compile LLVM.
+
+A complete target manifest (schema 2) may include `incompatible_targets` with
+native clean-install evidence. Python 3.9 cannot import source revisions using
+`dataclass(slots=True)`; those wheels are never published. Other target failures
+still block publication. `publish_run_id` reconciles retained artifacts from one
+exact run, without rebuilding successful targets or mixing versions.

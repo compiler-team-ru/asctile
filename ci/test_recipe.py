@@ -81,6 +81,22 @@ class RecipeTests(unittest.TestCase):
             self.assertEqual(set(result['targets']), set(ALL_TARGETS))
             self.assertEqual(set(result['wheels']), set(ALL_TARGETS))
             self.assertEqual(len(list(dist.glob('*.whl'))), 8)
+            excluded = {}
+            for arch in ('x86_64', 'aarch64'):
+                name = 'cp39-' + arch
+                for file in (artifacts / name).iterdir():
+                    file.unlink()
+                (artifacts / name).rmdir()
+                excluded[name] = {'status': 'incompatible', 'source_sha': SHA,
+                                  'job_url': 'https://github.com/job', 'log_sha256': 'a' * 64}
+            evidence = root / 'incompatible.json'
+            evidence.write_text(json.dumps(excluded))
+            with patch.object(sys, 'argv', ['publish-all.py', str(artifacts), str(root / 'six'), str(manifest), str(evidence)]):
+                publish_all.main()
+            result = json.loads(manifest.read_text())
+            self.assertEqual(len(result['wheels']), 6)
+            self.assertEqual(result['incompatible_targets'], excluded)
+
 
     def verify_publication(self, responses):
         with tempfile.TemporaryDirectory() as directory:
