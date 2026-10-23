@@ -60,6 +60,7 @@ class RecipeTests(unittest.TestCase):
                 passport = {
                     'version': '1.1.1.dev1', 'source_sha': SHA, 'recipe_sha256': 'b' * 64,
                     'run_id': 42, 'target': target_name, 'wheel_sha256': checksum,
+                    'llvm': target, 'recipe_commit': SHA, 'runtime_dependency_wheels': {},
                 }
                 (directory / 'build-passport.json').write_text(json.dumps(passport))
                 (directory / 'SHA256SUMS').write_text(
@@ -78,6 +79,7 @@ class RecipeTests(unittest.TestCase):
             self.assertEqual(result['recipe_sha256'], 'b' * 64)
             self.assertEqual(result['run_id'], '42')
             self.assertEqual(set(result['targets']), set(ALL_TARGETS))
+            self.assertEqual(set(result['wheels']), set(ALL_TARGETS))
             self.assertEqual(len(list(dist.glob('*.whl'))), 8)
 
     def verify_publication(self, responses):

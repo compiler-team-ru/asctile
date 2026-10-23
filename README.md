@@ -96,3 +96,12 @@ python -I /path/to/ci/runtime-smoke.py model
 
 The smoke tests one float32 addition. It does not measure hardware performance.
 PyPI versions are immutable: a new build must use a new development version.
+
+## Image consumers
+
+A successful publication creates a GitHub Release named `wheel-<version>`
+with `wheel-manifest.json`. It records the single PyAsc source commit,
+wheel recipe, required LLVM revision, and all eight wheel filenames, URLs
+and SHA256 hashes. The manifest becomes complete only after every wheel
+has been downloaded from PyPI and verified. Container builders consume this
+manifest rather than resolving independent "latest" versions per target.

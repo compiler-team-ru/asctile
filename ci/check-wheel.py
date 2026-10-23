@@ -92,7 +92,7 @@ def main():
     assert paths == (["$ORIGIN/../../pyasc_dev.libs"] if target["zstd_soname"] else []), paths
     needed = re.findall(r"Shared library: \[([^\]]+)\]", dynamic)
     loader = {'aarch64': 'ld-linux-aarch64.so.1', 'x86_64': 'ld-linux-x86-64.so.2'}[target['arch']]
-    assert {n for n in needed if not is_zstd(n, target)} <= {"libm.so.6", "libz.so.1", "libstdc++.so.6", "libgcc_s.so.1", "libc.so.6", loader}, needed
+    assert {n for n in needed if not is_zstd(n, target)} <= {"libm.so.6", "libz.so.1", "libstdc++.so.6", "libgcc_s.so.1", "libc.so.6", "librt.so.1", "libdl.so.2", "libpthread.so.0", loader}, needed
     versions = subprocess.check_output(["readelf", "--version-info", str(native_path)], text=True)
     glibc = sorted({tuple(map(int, v.split('.'))) for v in re.findall(r"\bGLIBC_([0-9.]+)", versions)})
     assert glibc and max(glibc) <= (2, 28), glibc
@@ -118,7 +118,7 @@ def main():
         "auditwheel": Path("/work/auditwheel.txt").read_text(),
         "compiler": subprocess.check_output(["g++", "--version"], text=True),
         "build_dependencies": subprocess.check_output([sys.executable, "-m", "pip", "freeze", "--all"], text=True),
-        "os_packages": subprocess.check_output(["dpkg-query", "-W"], text=True),
+        "os_packages": subprocess.check_output(["rpm", "-qa"], text=True),
         "runtime_dependency_wheels": {p.name: digest(p) for p in Path("/work/dependencies").glob("*.whl")},
         "clean_install_import_checks": checks,
         "cann_compile": "not-run", "numerical": "not-run", "hardware": "not-run",

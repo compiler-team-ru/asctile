@@ -30,6 +30,7 @@ def main():
     recipe_shas = set()
     run_ids = set()
     targets = {}
+    wheels_manifest = {}
     dist.mkdir(parents=True, exist_ok=True)
     assert not list(dist.iterdir()), 'Distribution directory must be empty'
 
@@ -57,6 +58,11 @@ def main():
 
         assert target['id'] not in targets
         targets[target['id']] = sums[wheel.name]
+        wheels_manifest[target['id']] = {
+            'filename': wheel.name, 'sha256': sums[wheel.name],
+            'llvm': passport['llvm'], 'recipe_commit': passport['recipe_commit'],
+            'dependencies': passport['runtime_dependency_wheels'],
+        }
         versions.add(passport['version'])
         source_shas.add(passport['source_sha'])
         recipe_shas.add(passport['recipe_sha256'])
@@ -75,6 +81,9 @@ def main():
         'recipe_sha256': next(iter(recipe_shas)),
         'run_id': next(iter(run_ids)),
         'targets': targets,
+        'wheels': wheels_manifest,
+        'schema_version': 1,
+        'source_repository': 'compiler-team-ru/pyasc',
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
     print(json.dumps(manifest))
