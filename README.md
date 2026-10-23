@@ -64,10 +64,14 @@ survives artifact expiration.
 
 ## Publish
 
-Scheduled builds never publish. To publish a checked artifact, manually run
-`wheels.yml` with its successful build run ID, `publish_target`, and the wheel's
-full SHA256. Publish each qualified target separately.
-The publishing job downloads and verifies that artifact; it does not rebuild it.
+The daily run checks whether the exact PyAsc source and build recipe have
+already been published. If they have, the workflow stops without rebuilding.
+Otherwise, it builds all eight targets, verifies each artifact, and publishes
+them together as one PyPI release. The `pypi` environment gates publication.
+The publishing job downloads and verifies the eight artifacts from that run;
+it does not rebuild them. A successful publication records a marker artifact so
+later daily runs can skip the same source and recipe. Use the manual `force`
+input to build and publish a new development version.
 
 Trusted Publisher settings:
 

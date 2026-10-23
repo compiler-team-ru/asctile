@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -16,6 +17,9 @@ from target import get_target, artifact_suffix, wheel_tag
 spec = importlib.util.spec_from_file_location('wheel_check', Path(__file__).with_name('check-wheel.py'))
 wheel_check = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(wheel_check)
+publish_all_spec = importlib.util.spec_from_file_location('publish_all', Path(__file__).with_name('publish-all.py'))
+publish_all = importlib.util.module_from_spec(publish_all_spec)
+publish_all_spec.loader.exec_module(publish_all)
 SHA = 'a' * 40
 ALL_TARGETS = tuple(sorted(json.loads(Path(__file__).with_name('toolchain.json').read_text())))
 
@@ -37,6 +41,44 @@ class RecipeTests(unittest.TestCase):
     def test_manylinux_glibc_ceiling_is_2_28(self):
         source = Path(__file__).with_name('check-wheel.py').read_text()
         self.assertIn('max(glibc) <= (2, 28)', source)
+
+    def test_collect_all_target_wheels_from_one_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifacts = root / 'artifacts'
+            dist = root / 'dist'
+            manifest = root / 'published.json'
+            artifacts.mkdir()
+            for target_name in ALL_TARGETS:
+                target = get_target(target_name)
+                directory = artifacts / target_name
+                directory.mkdir()
+                wheel_name = f"pyasc_dev-1.1.1.dev1-{wheel_tag(target)}.whl"
+                content = f'wheel-{target_name}'.encode()
+                checksum = hashlib.sha256(content).hexdigest()
+                (directory / wheel_name).write_bytes(content)
+                passport = {
+                    'version': '1.1.1.dev1', 'source_sha': SHA, 'recipe_sha256': 'b' * 64,
+                    'run_id': 42, 'target': target_name, 'wheel_sha256': checksum,
+                }
+                (directory / 'build-passport.json').write_text(json.dumps(passport))
+                (directory / 'SHA256SUMS').write_text(
+                    f'{checksum}  {wheel_name}\n'
+                    f"{hashlib.sha256((directory / 'build-passport.json').read_bytes()).hexdigest()}  build-passport.json\n"
+                )
+            original_argv = sys.argv
+            try:
+                sys.argv = ['publish-all.py', str(artifacts), str(dist), str(manifest)]
+                publish_all.main()
+            finally:
+                sys.argv = original_argv
+            result = json.loads(manifest.read_text())
+            self.assertEqual(result['version'], '1.1.1.dev1')
+            self.assertEqual(result['source_sha'], SHA)
+            self.assertEqual(result['recipe_sha256'], 'b' * 64)
+            self.assertEqual(result['run_id'], '42')
+            self.assertEqual(set(result['targets']), set(ALL_TARGETS))
+            self.assertEqual(len(list(dist.glob('*.whl'))), 8)
 
     def verify_publication(self, responses):
         with tempfile.TemporaryDirectory() as directory:

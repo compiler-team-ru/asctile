@@ -47,11 +47,39 @@ def source_commit():
     return branch, commit
 
 
+def published_artifact_name(sha, recipe):
+    return f'published-{sha}-{recipe[:16]}'
+
+
+def published(sha, recipe):
+    if os.environ.get('INPUT_FORCE', 'false') == 'true':
+        return False
+    repo = os.environ['GITHUB_REPOSITORY']
+    name = published_artifact_name(sha, recipe)
+    items = api(f'repos/{repo}/actions/artifacts?' + urllib.parse.urlencode({'name': name, 'per_page': 100}))['artifacts']
+    for item in items:
+        if item['name'] != name or item['expired']:
+            continue
+        run = api(f"repos/{repo}/actions/runs/{item['workflow_run']['id']}")
+        if run['conclusion'] == 'success' and run['path'] == '.github/workflows/wheels.yml':
+            return True
+    return False
+
+
 def source():
     _, commit = source_commit()
+    root = Path(__file__).parent.parent
+    recipe = recipe_digest(root)
+    is_published = published(commit['sha'], recipe)
     version = '1.1.1.dev' + datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
     with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-        output.write(f"sha={commit['sha']}\nversion={version}\n")
+        output.write(
+            f"sha={commit['sha']}\n"
+            f"version={version}\n"
+            f"recipe_sha256={recipe}\n"
+            f"published={'true' if is_published else 'false'}\n"
+            f"published_artifact={published_artifact_name(commit['sha'], recipe)}\n"
+        )
 
 
 def main():
