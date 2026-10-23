@@ -10,14 +10,14 @@ Wheels support these Linux targets:
 
 | Architecture | Python | Minimum glibc |
 | --- | --- | --- |
-| AArch64 | CPython 3.10 | 2.35 |
-| x86_64 | CPython 3.10, 3.11 | 2.35 |
+| AArch64 | CPython 3.9, 3.10, 3.11, 3.12 | 2.28 |
+| x86_64 | CPython 3.9, 3.10, 3.11, 3.12 | 2.28 |
 
 Use the matching interpreter below. Other Python/architecture combinations,
 macOS, and Windows are not provided.
 
 ```bash
-python3.10 -m venv .venv  # Python 3.11 is also supported on x86_64.
+python3.10 -m venv .venv  # Python 3.9, 3.11, and 3.12 are also supported.
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install --pre pyasc-dev
@@ -40,25 +40,16 @@ Each build uses `PYASC_SETUP_EXPERIMENTAL=1`.
 An unchanged source and recipe are skipped while a successful artifact remains
 available. Artifacts expire after 90 days.
 
-All builders use Ubuntu 22.04 and checksum-pinned LLVM archives from
-[`ci/toolchain.json`](https://github.com/compiler-team-ru/asctile/blob/main/ci/toolchain.json).
-The AArch64 archive comes from upstream. The x86_64 archive is stored in
-[a GitHub Release](https://github.com/compiler-team-ru/asctile/releases/tag/llvm-cd708029-ubuntu22-x86_64-v1),
-with its checksum and build passport. It preserves LLVM revision
-`cd708029e0b2869e80abe31ddb175f7c35361f90` and was built with clang and lld on
-Ubuntu 22.04. All 135 installed ELF files were checked for GLIBC requirements
-no newer than 2.35. The original upstream x86_64 archive requires a newer glibc.
+All builders use digest-pinned PyPA `manylinux_2_28` images for AArch64 and
+x86_64. The images provide CPython 3.9–3.12 and the GNU toolchain. LLVM revision
+`cd708029e0b2869e80abe31ddb175f7c35361f90` is built from source inside the same
+baseline, so no prebuilt archive with a newer glibc requirement is used.
 
-Regular wheel builds download LLVM; they never compile it. The manual
-[`llvm.yml`](https://github.com/compiler-team-ru/asctile/blob/main/.github/workflows/llvm.yml)
-workflow can reproduce the archive using an immutable builder recipe. It uses
-cached layers when available and produces an archive, passport, and checksums
-for review before creating a new toolchain release. Release assets are not replaced.
-
-A changed upstream LLVM download URL stops wheel builds for review. PyAsc uses
-GCC with its matching linker. CPython 3.10 uses Ubuntu 22.04 system packages.
-The Python 3.11 builder uses a checksum-pinned official archive. Docker layers are cached; the LLVM release
-remains available independently of that cache. No build trees enter the wheel.
+The manual [`llvm.yml`](https://github.com/compiler-team-ru/asctile/blob/main/.github/workflows/llvm.yml)
+workflow builds LLVM on both manylinux architectures and exports an archive,
+passport, and checksums for review. Wheel builds use the same source-build
+recipe and cached Docker layers. PyAsc is compiled with GCC and its matching
+linker. No build trees enter the wheel.
 
 Only the package description and required LLVM/zstd license notices are added
 to the exported source. Compiler and runtime code are unchanged. `auditwheel`

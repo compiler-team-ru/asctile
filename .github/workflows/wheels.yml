@@ -2,7 +2,7 @@ name: Development wheel
 
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '17 4 * * *'
   workflow_dispatch:
     inputs:
       source_sha:
@@ -24,7 +24,15 @@ on:
       publish_target:
         description: 'Target of the qualified wheel to publish'
         type: choice
-        options: [cp310-aarch64, cp311-x86_64, cp310-x86_64]
+        options:
+          - cp39-aarch64
+          - cp310-aarch64
+          - cp311-aarch64
+          - cp312-aarch64
+          - cp39-x86_64
+          - cp310-x86_64
+          - cp311-x86_64
+          - cp312-x86_64
         default: cp310-aarch64
   push:
     branches: [main]
@@ -63,12 +71,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - target: cp39-aarch64
+            runner: ubuntu-24.04-arm
+            arch: aarch64
           - target: cp310-aarch64
             runner: ubuntu-24.04-arm
+            arch: aarch64
+          - target: cp311-aarch64
+            runner: ubuntu-24.04-arm
+            arch: aarch64
+          - target: cp312-aarch64
+            runner: ubuntu-24.04-arm
+            arch: aarch64
+          - target: cp39-x86_64
+            runner: ubuntu-24.04
+            arch: x86_64
           - target: cp310-x86_64
             runner: ubuntu-24.04
+            arch: x86_64
           - target: cp311-x86_64
             runner: ubuntu-24.04
+            arch: x86_64
+          - target: cp312-x86_64
+            runner: ubuntu-24.04
+            arch: x86_64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
@@ -114,8 +140,8 @@ jobs:
           build-args: |
             BASE_IMAGE=${{ steps.source.outputs.base_image }}
             BUILD_TARGET=${{ matrix.target }}
-          cache-from: type=gha,scope=builder-${{ matrix.target }}
-          cache-to: type=gha,scope=builder-${{ matrix.target }},mode=max
+          cache-from: type=gha,scope=builder-manylinux_2_28-${{ matrix.arch }}
+          cache-to: type=gha,scope=builder-manylinux_2_28-${{ matrix.arch }},mode=max
       - name: Build wheel and check clean installations
         if: steps.source.outputs.build == 'true'
         env:

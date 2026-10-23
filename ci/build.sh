@@ -20,7 +20,7 @@ assert 'asc/_C/libpyasc' + sysconfig.get_config_var('EXT_SUFFIX') == lock['nativ
 assert subprocess.check_output(['/opt/llvm/bin/llvm-config', '--version'], text=True).strip() == lock['version']
 instructions = (Path('/source') / lock['source_instructions']).read_text()
 assert lock['revision'] in Path('/opt/llvm/include/llvm/Support/VCSRevision.h').read_text()
-assert lock.get('upstream_archive_url', lock['archive_url']) in instructions, 'Upstream LLVM instructions changed; review toolchain.json before building'
+assert 'LLVM_INSTALL_PREFIX' in instructions, 'Upstream LLVM instructions changed; review toolchain.json before building'
 PYTHON
 test ! -e /work/source
 mkdir /work/source /work/raw /work/build /work/dependencies /work/wheels
@@ -36,13 +36,13 @@ llvm = json.loads(Path('/opt/toolchain.json').read_text())
 with Path('/work/source/README.md').open('a') as description:
     description.write('\n## Build provenance\n\n')
     description.write(f"Source: `{source['source_sha']}` in `{source['source_repository']}`.\n\n")
-    description.write(f"LLVM revision: `{llvm['revision']}`; build method: `{llvm.get('build_method', 'upstream archive')}`; archive SHA256: `{llvm['archive_sha256']}`.\n\n")
+    description.write(f"LLVM revision: `{llvm['revision']}`; build method: `{llvm.get('build_method', 'manylinux_2_28 source')}`.\n\n")
     description.write(f"Recipe SHA256: `{source['recipe_sha256']}`.\n")
     if source.get('recipe_commit'):
         description.write(f"\nRecipe commit: `{source['recipe_commit']}` in `{source['recipe_repository']}`.\n")
 PYTHON
 cp /opt/licenses/LLVM.txt /work/source/LICENSE-LLVM.txt
-if [ "$BUILD_TARGET" = cp310-aarch64 ]; then
+if [ -n "$(python -c 'import sys; sys.path.insert(0,"/recipe/ci"); from target import get_target; print(get_target()["zstd_soname"] or "")')" ]; then
   cp /usr/share/doc/libzstd1/copyright /work/source/LICENSE-ZSTD.txt
 fi
 export PYASC_SETUP_NAME=pyasc-dev PYASC_SETUP_EXPERIMENTAL=1

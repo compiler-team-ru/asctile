@@ -95,7 +95,7 @@ def main():
     assert {n for n in needed if not is_zstd(n, target)} <= {"libm.so.6", "libz.so.1", "libstdc++.so.6", "libgcc_s.so.1", "libc.so.6", loader}, needed
     versions = subprocess.check_output(["readelf", "--version-info", str(native_path)], text=True)
     glibc = sorted({tuple(map(int, v.split('.'))) for v in re.findall(r"\bGLIBC_([0-9.]+)", versions)})
-    assert glibc and max(glibc) <= (2, 35), glibc
+    assert glibc and max(glibc) <= (2, 28), glibc
     result["maximum_glibc_version"] = '.'.join(map(str, max(glibc)))
     result["native_dependencies"] = needed
     if "--finish" not in sys.argv:

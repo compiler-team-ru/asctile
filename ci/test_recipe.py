@@ -17,9 +17,27 @@ spec = importlib.util.spec_from_file_location('wheel_check', Path(__file__).with
 wheel_check = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(wheel_check)
 SHA = 'a' * 40
+ALL_TARGETS = tuple(sorted(json.loads(Path(__file__).with_name('toolchain.json').read_text())))
 
 
 class RecipeTests(unittest.TestCase):
+    def test_full_manylinux_2_28_matrix(self):
+        expected = {
+            'cp39-aarch64', 'cp310-aarch64', 'cp311-aarch64', 'cp312-aarch64',
+            'cp39-x86_64', 'cp310-x86_64', 'cp311-x86_64', 'cp312-x86_64',
+        }
+        self.assertEqual({get_target(name)['id'] for name in expected}, expected)
+        for name in expected:
+            target = get_target(name)
+            self.assertIn(target['platform'], {
+                'manylinux_2_28_aarch64', 'manylinux_2_28_x86_64'
+            })
+            self.assertIn('manylinux_2_28', target['base_image'])
+
+    def test_manylinux_glibc_ceiling_is_2_28(self):
+        source = Path(__file__).with_name('check-wheel.py').read_text()
+        self.assertIn('max(glibc) <= (2, 28)', source)
+
     def verify_publication(self, responses):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -72,7 +90,7 @@ class RecipeTests(unittest.TestCase):
             return json.loads((root / 'source.json').read_text())['build']
 
     def test_skip_successful_artifact(self):
-        for target in ('cp310-aarch64', 'cp311-x86_64', 'cp310-x86_64'):
+        for target in ALL_TARGETS:
             self.assertFalse(self.resolve_case(target_name=target))
 
     def test_retry_failed_build(self):
@@ -99,13 +117,14 @@ class RecipeTests(unittest.TestCase):
     def test_bundled_library_boundary(self):
         dist = 'pyasc_dev-1.1.1.dev1.dist-info'
         arm, x86 = get_target('cp310-aarch64'), get_target('cp311-x86_64')
-        for name in ('pyasc_dev.libs/libzstd-a1561916.so.1.4.8', dist + '/licenses/LICENSE-ZSTD.txt', dist + '/sboms/auditwheel.cdx.json'):
+        bundled = f"pyasc_dev.libs/libzstd-a1561916.so.{arm['zstd_soname']}"
+        for name in (bundled, dist + '/licenses/LICENSE-ZSTD.txt', dist + '/sboms/auditwheel.cdx.json'):
             self.assertTrue(wheel_check.allowed(name, dist, arm))
             self.assertFalse(wheel_check.allowed(name, dist, x86))
-        self.assertFalse(wheel_check.allowed('pyasc_dev.libs/libzstd-a1561916.so.1.5.5', dist, arm))
+        self.assertFalse(wheel_check.allowed('pyasc_dev.libs/libzstd-a1561916.so.9.9.9', dist, arm))
 
     def test_native_target_boundary(self):
-        targets = [get_target(name) for name in ('cp310-aarch64', 'cp311-x86_64', 'cp310-x86_64')]
+        targets = [get_target(name) for name in ALL_TARGETS]
         dist = 'pyasc_dev-1.1.1.dev1.dist-info'
         for target in targets:
             for other in targets:
@@ -115,9 +134,9 @@ class RecipeTests(unittest.TestCase):
     def test_select_only_requested_target_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'output'
-            for name in ('cp310-aarch64', 'cp311-x86_64', 'cp310-x86_64'):
+            for name in ALL_TARGETS:
                 artifacts = [{'name': 'wheel-source-recipe-' + artifact_suffix(get_target(t)), 'expired': False}
-                             for t in ('cp310-aarch64', 'cp311-x86_64', 'cp310-x86_64')]
+                             for t in ALL_TARGETS]
                 run = {'conclusion': 'success', 'head_branch': 'main', 'path': '.github/workflows/wheels.yml', 'event': 'push'}
                 with patch.dict(os.environ, {'BUILD_TARGET': name, 'PUBLISH_RUN_ID': '42', 'PUBLISH_SHA256': 'b'*64,
                                              'GITHUB_REPOSITORY': 'owner/wheels', 'GITHUB_OUTPUT': str(output)}), \
@@ -157,7 +176,7 @@ class RecipeTests(unittest.TestCase):
                 os.chdir(original)
 
     def test_publish_exact_bytes_only(self):
-        for target in ('cp310-aarch64', 'cp311-x86_64', 'cp310-x86_64'):
+        for target in ALL_TARGETS:
             self.check_publication(target_name=target)
 
     def test_reject_changed_wheel(self):
