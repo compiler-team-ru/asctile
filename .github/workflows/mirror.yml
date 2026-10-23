@@ -3,7 +3,7 @@ name: Mirror pyasc
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '23 3 * * *'
 
 permissions:
   contents: read

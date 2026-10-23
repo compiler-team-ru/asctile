@@ -18,16 +18,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check:
+    name: Check PyAsc commit
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.pyasc.outputs.sha }}
+      build: ${{ steps.decision.outputs.build }}
+    steps:
+      - name: Initialize PyAsc repository
+        uses: actions/checkout@v4
+        with:
+          repository: compiler-team-ru/pyasc
+          ref: v2
+      - name: Get PyAsc commit
+        id: pyasc
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Check latest deployed commit
+        id: deployed
+        uses: actions/cache/restore@v5
+        with:
+          path: .pages-deployed
+          key: pages-pyasc-v2-${{ steps.pyasc.outputs.sha }}
+          lookup-only: true
+      - name: Decide whether to build
+        id: decision
+        env:
+          CACHE_HIT: ${{ steps.deployed.outputs.cache-hit }}
+        run: |
+          if [[ "$CACHE_HIT" == "true" ]]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build Pages
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    outputs:
+      sha: ${{ needs.check.outputs.sha }}
     steps:
       - name: Initialize repository
         uses: actions/checkout@v4
         with:
           repository: compiler-team-ru/pyasc
-          ref: v2
+          ref: ${{ needs.check.outputs.sha }}
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -89,3 +125,10 @@ jobs:
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Record deployed commit
+        run: echo "${{ needs.build.outputs.sha }}" > .pages-deployed
+      - name: Save deployed commit
+        uses: actions/cache/save@v5
+        with:
+          path: .pages-deployed
+          key: pages-pyasc-v2-${{ needs.build.outputs.sha }}
