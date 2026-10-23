@@ -52,6 +52,8 @@ jobs:
         run: python3 ci/resolve.py source
 
   wheel:
+    # Publication must classify Python 3.9 failures; unexplained failures still fail publish.
+    continue-on-error: ${{ startsWith(matrix.target, 'cp39-') }}
     needs: source
     if: needs.source.outputs.published != 'true'
     strategy:
