@@ -161,6 +161,7 @@ class RecipeTests(unittest.TestCase):
     def test_bundled_library_boundary(self):
         dist = 'pyasc_dev-1.1.1.dev1.dist-info'
         arm, x86 = get_target('cp310-aarch64'), get_target('cp311-x86_64')
+        arm['zstd_soname'] = '1.4.4'
         bundled = f"pyasc_dev.libs/libzstd-a1561916.so.{arm['zstd_soname']}"
         for name in (bundled, dist + '/licenses/LICENSE-ZSTD.txt', dist + '/sboms/auditwheel.cdx.json'):
             self.assertTrue(wheel_check.allowed(name, dist, arm))

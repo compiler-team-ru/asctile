@@ -42,9 +42,6 @@ with Path('/work/source/README.md').open('a') as description:
         description.write(f"\nRecipe commit: `{source['recipe_commit']}` in `{source['recipe_repository']}`.\n")
 PYTHON
 cp /opt/licenses/LLVM.txt /work/source/LICENSE-LLVM.txt
-if [ -n "$(python -c 'import sys; sys.path.insert(0,"/recipe/ci"); from target import get_target; print(get_target()["zstd_soname"] or "")')" ]; then
-  cp /usr/share/doc/libzstd1/copyright /work/source/LICENSE-ZSTD.txt
-fi
 export PYASC_SETUP_NAME=pyasc-dev PYASC_SETUP_EXPERIMENTAL=1
 export SETUPTOOLS_SCM_PRETEND_VERSION="$WHEEL_VERSION" PYASC_SETUP_VERSION="$WHEEL_VERSION"
 export PYASC_SETUP_JOBS=1 PYASC_SETUP_COMPILER=g++
