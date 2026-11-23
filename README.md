@@ -6,12 +6,13 @@ install `pyasc` and `pyasc-dev` together.
 
 ## Install
 
-Wheels support these Linux targets:
+The Linux wheel matrix contains these targets. Only qualified targets appear
+in each publication manifest:
 
 | Architecture | Python | Minimum glibc |
 | --- | --- | --- |
-| AArch64 | CPython 3.9, 3.10, 3.11, 3.12 | 2.28 |
-| x86_64 | CPython 3.9, 3.10, 3.11, 3.12 | 2.28 |
+| AArch64 | CPython 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 | 2.28 |
+| x86_64 | CPython 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 | 2.28 |
 
 Use the matching interpreter below. Other Python/architecture combinations,
 macOS, and Windows are not provided.
@@ -33,15 +34,24 @@ This is a development release, not broad numerical or hardware qualification.
 ## Build
 
 GitHub Actions checks the default branch of
-[compiler-team-ru/pyasc](https://github.com/compiler-team-ru/pyasc) hourly and
+[compiler-team-ru/pyasc](https://github.com/compiler-team-ru/pyasc) daily and
 supports manual dispatch. The GitCode-to-GitHub mirror is maintained separately.
+The build matrix also includes CPython 3.13 and 3.14 candidates on both
+architectures. These are not advertised as supported until build, clean-install,
+and native-import checks pass with unchanged upstream source and dependencies.
+Failures for either new version block publication; they are not treated as the
+known Python 3.9 incompatibility. NumPy remains pinned to 1.26.4 and is built
+from its unmodified source when no matching binary exists. Installing on
+Python 3.13/3.14 therefore requires a working C/C++ compiler and Python headers
+for the NumPy dependency build; no replacement NumPy package is published.
+
 All targets share an exact source SHA and a development version per run.
 Each build uses `PYASC_SETUP_EXPERIMENTAL=1`.
 An unchanged source and recipe are skipped while a successful artifact remains
 available. Artifacts expire after 90 days.
 
 All builders use digest-pinned PyPA `manylinux_2_28` images for AArch64 and
-x86_64. The images provide CPython 3.9–3.12 and the GNU toolchain. LLVM revision
+x86_64. The images provide CPython 3.9–3.14 and the GNU toolchain. LLVM revision
 `cd708029e0b2869e80abe31ddb175f7c35361f90` is built from source inside the same
 baseline, so no prebuilt archive with a newer glibc requirement is used.
 
@@ -66,9 +76,9 @@ survives artifact expiration.
 
 The daily run checks whether the exact PyAsc source and build recipe have
 already been published. If they have, the workflow stops without rebuilding.
-Otherwise, it builds all eight targets, verifies each artifact, and publishes
+Otherwise, it builds all twelve candidate targets, verifies each artifact, and publishes
 them together as one PyPI release. The `pypi` environment gates publication.
-The publishing job downloads and verifies the eight artifacts from that run;
+The publishing job downloads and verifies the qualified artifacts from that run;
 it does not rebuild them. A successful publication records a marker artifact so
 later daily runs can skip the same source and recipe. Use the manual `force`
 input to build and publish a new development version.
@@ -101,7 +111,7 @@ PyPI versions are immutable: a new build must use a new development version.
 
 A successful publication creates a GitHub Release named `wheel-<version>`
 with `wheel-manifest.json`. It records the single PyAsc source commit,
-wheel recipe, required LLVM revision, and all eight wheel filenames, URLs
+wheel recipe, required LLVM revision, and all qualified wheel filenames, URLs
 and SHA256 hashes. The manifest becomes complete only after every wheel
 has been downloaded from PyPI and verified. Container builders consume this
 manifest rather than resolving independent "latest" versions per target.

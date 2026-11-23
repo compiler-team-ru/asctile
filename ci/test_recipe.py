@@ -27,9 +27,15 @@ ALL_TARGETS = tuple(sorted(json.loads(Path(__file__).with_name('toolchain.json')
 class RecipeTests(unittest.TestCase):
     def test_full_manylinux_2_28_matrix(self):
         expected = {
-            'cp39-aarch64', 'cp310-aarch64', 'cp311-aarch64', 'cp312-aarch64',
-            'cp39-x86_64', 'cp310-x86_64', 'cp311-x86_64', 'cp312-x86_64',
+            'cp39-aarch64', 'cp310-aarch64', 'cp311-aarch64', 'cp312-aarch64', 'cp313-aarch64', 'cp314-aarch64',
+            'cp39-x86_64', 'cp310-x86_64', 'cp311-x86_64', 'cp312-x86_64', 'cp313-x86_64', 'cp314-x86_64',
         }
+        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/wheels.yml').read_text()
+        import re
+        declared = re.findall(r'- target: (cp\d+-(?:aarch64|x86_64))', workflow)
+        self.assertEqual(len(declared), len(set(declared)))
+        self.assertEqual(set(declared), expected)
+        self.assertEqual(set(ALL_TARGETS), expected)
         self.assertEqual({get_target(name)['id'] for name in expected}, expected)
         for name in expected:
             target = get_target(name)
@@ -80,7 +86,7 @@ class RecipeTests(unittest.TestCase):
             self.assertEqual(result['run_id'], '42')
             self.assertEqual(set(result['targets']), set(ALL_TARGETS))
             self.assertEqual(set(result['wheels']), set(ALL_TARGETS))
-            self.assertEqual(len(list(dist.glob('*.whl'))), 8)
+            self.assertEqual(len(list(dist.glob('*.whl'))), len(ALL_TARGETS))
             excluded = {}
             for arch in ('x86_64', 'aarch64'):
                 name = 'cp39-' + arch
@@ -91,10 +97,10 @@ class RecipeTests(unittest.TestCase):
                                   'job_url': 'https://github.com/job', 'log_sha256': 'a' * 64}
             evidence = root / 'incompatible.json'
             evidence.write_text(json.dumps(excluded))
-            with patch.object(sys, 'argv', ['publish-all.py', str(artifacts), str(root / 'six'), str(manifest), str(evidence)]):
+            with patch.object(sys, 'argv', ['publish-all.py', str(artifacts), str(root / 'qualified'), str(manifest), str(evidence)]):
                 publish_all.main()
             result = json.loads(manifest.read_text())
-            self.assertEqual(len(result['wheels']), 6)
+            self.assertEqual(len(result['wheels']), len(ALL_TARGETS) - 2)
             self.assertEqual(result['incompatible_targets'], excluded)
 
 

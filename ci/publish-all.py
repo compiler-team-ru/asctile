@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil
 import sys
 
-from target import get_target, wheel_tag
+from target import get_target, wheel_tag, target_names
 
 
 def digest(path):
@@ -25,7 +25,7 @@ def main():
     directories = sorted(path for path in artifacts.iterdir() if path.is_dir())
     incompatible = json.loads(Path(sys.argv[4]).read_text()) if len(sys.argv) == 5 else {}
     assert set(incompatible) <= {'cp39-x86_64', 'cp39-aarch64'}
-    assert len(directories) + len(incompatible) == 8, 'Incomplete target qualification'
+    assert len(directories) + len(incompatible) == len(target_names()), 'Incomplete target qualification'
 
     versions = set()
     source_shas = set()
@@ -75,7 +75,7 @@ def main():
     assert len(source_shas) == 1, 'All target wheels must share one source SHA'
     assert len(recipe_shas) == 1, 'All target wheels must share one recipe SHA'
     assert len(run_ids) == 1, 'All target wheels must come from one run'
-    expected = {f'cp{p}-{a}' for p in ('39', '310', '311', '312') for a in ('x86_64', 'aarch64')}
+    expected = set(target_names())
     assert not set(targets) & set(incompatible)
     assert set(targets) | set(incompatible) == expected
     assert all(e['source_sha'] == next(iter(source_shas)) and e['status'] == 'incompatible'

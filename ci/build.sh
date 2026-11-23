@@ -49,7 +49,9 @@ unset PYASC_SETUP_LINKER PYASC_SETUP_CLANG_LLD
 export PYASC_SETUP_BUILD_DIR=/work/build
 unset PYTHONPATH PYTHONHOME
 python -m pip wheel -v --no-build-isolation --no-deps -w /work/raw /work/source
-python -m pip download --only-binary=:all: --dest /work/dependencies \
+# NumPy 1.26.4 has no CPython 3.13/3.14 binaries; retain its upstream pin
+# and build the dependency from source for the offline installation checks.
+python -m pip wheel --wheel-dir /work/dependencies --config-settings=compile-args=-j2 \
   pybind11==2.10.3 numpy==1.26.4 typing_extensions==4.16.0
 auditwheel repair --only-plat --plat "$(python -c 'import sys; sys.path.insert(0,"/recipe/ci"); from target import get_target; print(get_target()["platform"])')" --wheel-dir /work/wheels /work/raw/*.whl
 auditwheel show /work/wheels/*.whl > /work/auditwheel.txt

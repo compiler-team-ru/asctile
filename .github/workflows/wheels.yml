@@ -72,6 +72,12 @@ jobs:
           - target: cp312-aarch64
             runner: ubuntu-24.04-arm
             arch: aarch64
+          - target: cp313-aarch64
+            runner: ubuntu-24.04-arm
+            arch: aarch64
+          - target: cp314-aarch64
+            runner: ubuntu-24.04-arm
+            arch: aarch64
           - target: cp39-x86_64
             runner: ubuntu-24.04
             arch: x86_64
@@ -82,6 +88,12 @@ jobs:
             runner: ubuntu-24.04
             arch: x86_64
           - target: cp312-x86_64
+            runner: ubuntu-24.04
+            arch: x86_64
+          - target: cp313-x86_64
+            runner: ubuntu-24.04
+            arch: x86_64
+          - target: cp314-x86_64
             runner: ubuntu-24.04
             arch: x86_64
     runs-on: ${{ matrix.runner }}

@@ -4,6 +4,10 @@ import os
 from pathlib import Path
 
 
+def target_names():
+    return tuple(json.loads(Path(__file__).with_name('toolchain.json').read_text()))
+
+
 def get_target(name=None):
     name = name or os.environ.get('BUILD_TARGET', 'cp310-aarch64')
     targets = json.loads(Path(__file__).with_name('toolchain.json').read_text())

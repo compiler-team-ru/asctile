@@ -7,6 +7,8 @@ import re
 import subprocess
 import sys
 
+from target import target_names
+
 
 def incompatible(job, log, version):
     target = re.fullmatch(r'wheel \((cp39-(?:x86_64|aarch64)), [^,]+, [^)]+\)', job['name'])
@@ -23,6 +25,18 @@ def incompatible(job, log, version):
     }
 
 
+def matrix_jobs(jobs):
+    targets = [j for j in jobs if j['name'].startswith('wheel (')]
+    names = []
+    for job in targets:
+        match = re.fullmatch(r'wheel \((cp\d+-(?:x86_64|aarch64)), [^,]+, [^)]+\)', job['name'])
+        assert match, 'Unexpected wheel job name'
+        names.append(match.group(1))
+    assert len(names) == len(set(names)), 'Duplicate wheel target jobs'
+    assert set(names) == set(target_names()), 'Incomplete wheel target jobs'
+    return targets
+
+
 def main():
     artifacts, run_id, output = sys.argv[1:]
     passports = [json.loads(p.read_text()) for p in Path(artifacts).glob('*/build-passport.json')]
@@ -37,8 +51,7 @@ def main():
     assert {p['recipe_commit'] for p in passports} == {run['head_sha']}
     jobs = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/actions/runs/{run_id}/jobs?per_page=100'], text=True))['jobs']
     result = {}
-    targets = [j for j in jobs if j['name'].startswith('wheel (')]
-    assert len(targets) == 8
+    targets = matrix_jobs(jobs)
     for job in targets:
         assert job['status'] == 'completed'
         if job['conclusion'] == 'success':
